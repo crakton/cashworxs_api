@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Models\User;
+use Http;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
@@ -36,6 +37,7 @@ class AuthController extends BaseController
                 'full_name' => $validated['full_name'],
                 'phone_number' => $validated['phone_number'],
                 'password' => Hash::make($validated['password']),
+                'verified' => false,
             ]);
 
             $token = JWTAuth::fromUser($user);
@@ -57,7 +59,7 @@ class AuthController extends BaseController
         try {
             $request->validate([
                 'phone_number' => 'required|string|max:11',
-                'type' =>    'required|string|in:sms,robo_call',
+                'type' => 'required|string|in:sms,robo_call',
             ]);
 
             // Generate OTP
@@ -71,17 +73,83 @@ class AuthController extends BaseController
                 300
             );
 
-            // Debug response (ensure this matches in verification)
-            return $this->sendResponse([
-                'token' => $token,
-                'debug_otp' => $otp // REMOVE IN PRODUCTION
-            ], 'OTP sent successfully');
+            // Prepare parameters
+            $to = '+234' . ltrim($request->phone_number, '0');
+            $url = env('TERMII_BASE_URI') . '/sms/send';
+            $apiKey = env('TERMII_API_KEY');
+            $message = "Your OTP is: $otp";
+
+            if (!$url || !$apiKey) {
+                throw new \Exception('TERMII_BASE_URI or TERMII_API_KEY is missing in the environment file.');
+            }
+
+            $payload = [
+                'to' => $to,
+                'sms' => $message,
+                'api_key' => $apiKey,
+                "type" => "plain",
+                "channel" => "generic",
+                "from" => "careposting"
+            ];
+
+            $curl = curl_init();
+
+            $post_data = json_encode($payload);
+
+            curl_setopt_array($curl, array(
+                CURLOPT_URL => "https://api.ng.termii.com/api/sms/send",
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => "",
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => "POST",
+                CURLOPT_POSTFIELDS => $post_data,
+                CURLOPT_HTTPHEADER => array(
+                    "Content-Type: application/json"
+                ),
+            ));
+
+            $response = curl_exec($curl);
+
+            \Log::info('Termii Response: ' . $response);
+
+            curl_close($curl);
+
+            if ($response) {
+                return $this->sendResponse([
+                    'token' => $token,
+                    // 'debug_otp' => $otp // REMOVE IN PRODUCTION
+                ], 'OTP sent successfully');
+            } else {
+                return $this->sendError('Failed to send OTP');
+            }
+
+
+            // $response = Http::withHeaders([
+            //     'Content-Type' => 'application/json',
+            // ])->post($url, $payload);
+
+            // \Log::info('Termii Response: ' . $response->body());
+
+            // if ($response->successful()) {
+            //     return $this->sendResponse([
+            //         'token' => $token,
+            //         // 'debug_otp' => $otp // REMOVE IN PRODUCTION
+            //     ], 'OTP sent successfully');
+            // } else {
+            //     return $this->sendError('Failed to send OTP', [
+            //         'error' => $response->body()
+            //     ], $response->status());
+            // }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
         } catch (\Exception $e) {
             return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
         }
     }
+
 
     public function verifyOTP(Request $request)
     {
