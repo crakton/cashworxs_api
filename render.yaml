@@ -9,6 +9,11 @@ services:
         generateValue: true
       - key: DB_PASSWORD
         sync: false
+			- key: DB_HOST
+				fromService:
+					type: web
+					name: cashworx-db
+					property: host
       - key: APP_URL
         fromService:
           type: web
