@@ -1,32 +1,18 @@
-# Use an official PHP image as the base
 FROM php:8.2-fpm
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    git \
-    libpq-dev
+RUN apt-get update && apt-get install -y libpq-dev \
+	&& docker-php-ext-install pdo pdo_pgsql
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd
+COPY . /var/www/html
+WORKDIR /var/www/html
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+ENV APP_NAME=cashworx-api \
+	APP_ENV=production \
+	APP_DEBUG=false \
+	DB_CONNECTION=pgsql \
+	DB_HOST=dpg-ctlcgkrqf0us7387pgn0-a \
+	DB_PORT=5432 \
+	DB_DATABASE=cashworx_e51v \
+	DB_USERNAME=crakton
 
-# Set working directory
-WORKDIR /var/www
-
-# Copy application files
-COPY . .
-
-# Install PHP dependencies
-RUN composer install --optimize-autoloader --no-dev
-
-# Expose port 80 and run PHP-FPM
-EXPOSE 80
-CMD ["php", "-S", "0.0.0.0:80", "-t", "public"]
+CMD sh -c "php artisan migrate --force && php artisan serve --port=80"
