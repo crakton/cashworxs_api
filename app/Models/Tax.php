@@ -3,24 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Tax extends Model
 {
-    use HasUlids;
+	use HasUlids;
+	// use HasFactory;
 
-    protected $table = 'taxes';
-    protected $fillable = [
-        'user_id',
-        'tax_type',
-        'tax_name',
-        'tax_year',
-        'tax_amount',
-        'tax_rate',
-        'tax_status',
-        'tax_metadata',
-        'gross_income'
-    ];
+	protected $table = 'taxes';
+	protected $fillable = [
+		'user_id',
+		'tax_type',
+		'tax_name',
+		'tax_year',
+		'tax_amount',
+		'tax_rate',
+		'tax_status',
+		'tax_metadata',
+		'gross_income'
+	];
 
-    protected $hidden = ['tax_rate'];
+	protected $hidden = ['tax_rate'];
 }
