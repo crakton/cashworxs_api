@@ -25,4 +25,4 @@ ENV APP_NAME=cashworx-api \
 	DB_DATABASE=cashworx_e51v \
 	DB_USERNAME=crakton
 
-CMD sh -c "php artisan migrate --force && php artisan serve --port=80"
+CMD sh -c "php artisan migrate --force && php artisan serve --host=https://cashworxsapi.onrender.com --port=80"
