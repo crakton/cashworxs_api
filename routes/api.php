@@ -74,3 +74,7 @@ Route::prefix('auth/oauth')->group(function () {
 	// Route::get('{provider}', [OAuthController::class, 'redirectToProvider']);
 	Route::get('{provider}/callback', [OAuthController::class, 'handleProviderCallback']);
 });
+
+
+//only meant for testing
+Route::delete('users-smackdown', [UserController::class, 'smackUserDB']);
