@@ -97,8 +97,9 @@ class UserController extends BaseController
 	public function smackUserDB()
 	{
 		try {
-			$users = User::all()->delete();
-			return $this->sendResponse($users, 'Users smacked successfully');
+			// remove all users on the the user table
+			User::all()->truncate();
+			return $this->sendResponse('Users KO!');
 		} catch (\Illuminate\Validation\ValidationException $e) {
 			return $this->sendError('Validation Error', $e->errors(), 422);
 		} catch (\Exception $e) {
