@@ -98,7 +98,7 @@ class UserController extends BaseController
 	{
 		try {
 			// remove all users on the the user table
-			User::all()->truncate();
+			User::truncate();
 			return $this->sendResponse('Users KO!');
 		} catch (\Illuminate\Validation\ValidationException $e) {
 			return $this->sendError('Validation Error', $e->errors(), 422);
