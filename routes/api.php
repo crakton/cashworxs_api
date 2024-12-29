@@ -64,6 +64,7 @@ Route::prefix('platforms')->group(function () {
 
 // settings
 Route::prefix('settings')->group(function () {
+	Route::get('languages', [SettingsController::class, 'getLanguages']);
 	Route::middleware('auth:api')->group(function () {
 		Route::post('language', [SettingsController::class, 'updateLanguage']);
 	});
