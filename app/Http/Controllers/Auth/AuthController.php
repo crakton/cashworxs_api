@@ -165,14 +165,24 @@ class AuthController extends BaseController
 
             // Log cached data for debugging
             \Log::info('Cached OTP Data:', ['cached' => $cached, 'request' => $request->all()]);
-
             // Validate the OTP and token
-            if (!$cached || (string)$cached['token'] !== $request->token || (string) $cached['otp'] !== $request->otp) {
+            if (!$cached || (string)$cached['token'] !== $request->token || (string)$cached['otp'] !== $request->otp) {
                 return $this->sendError('Invalid OTP', [], 400);
             }
-
             // Clear the OTP from cache
             Cache::forget("otp_{$request->phone_number}");
+
+            // Update the user
+            $user = User::where('phone_number', $request->phone_number)->first();
+
+            if (!$user) {
+                return $this->sendError('User not found', [], 404);
+            }
+
+            $user->update([
+                'verified' => true,
+                'phone_verified_at' => now(),
+            ]);
 
             return $this->sendResponse([], 'OTP verified successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
