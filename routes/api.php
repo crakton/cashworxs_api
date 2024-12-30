@@ -35,6 +35,7 @@ Route::prefix('users')->group(function () {
 
 	// protected user routes
 	Route::middleware('auth:api')->group(function () {
+		Route::get('transactions', [UserController::class, 'getAllTransactions']);
 		Route::delete('{id}', [UserController::class, 'dropUser']);
 		Route::put('{id}', [UserController::class, 'updateUser']);
 		Route::get('greetings', [UserController::class, 'greetings']);
@@ -67,6 +68,7 @@ Route::prefix('settings')->group(function () {
 	Route::get('languages', [SettingsController::class, 'getLanguages']);
 	Route::middleware('auth:api')->group(function () {
 		Route::post('language', [SettingsController::class, 'updateLanguage']);
+		Route::post('password', [SettingsController::class, 'getLanguage']);
 	});
 });
 

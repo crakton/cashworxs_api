@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Models\Fee;
+use App\Models\Tax;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -100,6 +102,21 @@ class UserController extends BaseController
 			// remove all users on the the user table
 			User::truncate();
 			return $this->sendResponse('Users KO!');
+		} catch (\Illuminate\Validation\ValidationException $e) {
+			return $this->sendError('Validation Error', $e->errors(), 422);
+		} catch (\Exception $e) {
+			return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+		}
+	}
+
+	public function getAllTransactions(Request $request)
+	{
+		try {
+			$user = $request->user();
+			$taxes = Tax::all()->where('user_id', $user->id);
+			$fees = Fee::all()->where('user_id', $user->id);
+			$transactions = $taxes->merge($fees);
+			return $this->sendResponse(['transactions' => $transactions], 'All transactions');
 		} catch (\Illuminate\Validation\ValidationException $e) {
 			return $this->sendError('Validation Error', $e->errors(), 422);
 		} catch (\Exception $e) {

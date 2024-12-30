@@ -62,6 +62,17 @@ class SettingsController extends BaseController
         }
     }
 
+    public function getLanguage(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $settings = Setting::where('user_id', $user->id)->first();
+            return $this->sendResponse([$settings->language], 'Language', 200);
+        } catch (\Exception $e) {
+            return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+        }
+    }
+
     public function getStates(Request $request)
     {
         try {
