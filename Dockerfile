@@ -26,4 +26,4 @@ ENV APP_NAME=cashworx-api \
 	DB_USERNAME=crakton
 
 # Run Laravel commands and start the server
-CMD sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=\$PORT"
+CMD sh -c "php artisan migrate --force;php artisan db:seed && php artisan serve --host=0.0.0.0 --port=\$PORT"
