@@ -20,9 +20,9 @@ ENV APP_NAME=cashworx-api \
 	APP_ENV=production \
 	APP_DEBUG=false \
 	DB_CONNECTION=pgsql \
-	DB_HOST=dpg-ctlcgkrqf0us7387pgn0-a \
+	DB_HOST=dpg-ctqfic2j1k6c739tl9jg-a \
 	DB_PORT=5432 \
-	DB_DATABASE=cashworx_e51v \
+	DB_DATABASE=cashworx_z9h5 \
 	DB_USERNAME=crakton
 
 # Run Laravel commands and start the server
