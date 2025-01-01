@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 class Fee extends Model
 {
 	use HasUlids;
-	// use HasFactory;
+	use HasFactory;
 
 	protected $table = 'fees';
 	protected $fillable = [
@@ -19,5 +19,9 @@ class Fee extends Model
 		'fee_amount',
 		'fee_status',
 		'fee_metadata'
+	];
+
+	protected $casts = [
+		'fee_metadata' => 'array',
 	];
 }

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 class Tax extends Model
 {
 	use HasUlids;
-	// use HasFactory;
+	use HasFactory;
 
 	protected $table = 'taxes';
 	protected $fillable = [

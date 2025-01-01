@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -10,13 +10,14 @@ use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable implements JWTSubject
 {
-	use HasUuids;
-	// use HasFactory;
+	use HasUlids;
+	use HasFactory;
 	use Notifiable;
 
 	protected $table = 'users';
 
 	protected $fillable = [
+		'is_admin',
 		'full_name',
 		'phone_number',
 		'password',
