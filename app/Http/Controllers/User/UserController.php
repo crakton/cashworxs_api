@@ -10,20 +10,37 @@ use Illuminate\Http\Request;
 
 class UserController extends BaseController
 {
-	public function greetings(Request $request)
+	public function greetUser(Request $request)
 	{
 		try {
 			$user = $request->user();
-			$hour = date('G');
+			$currentTime = now();
+			$hour = $currentTime->format('G');
+			$isFirstLogin = is_null($user->last_login_at); // Assuming 'last_login_at' is tracked in the users table
+
+			// Determine time-based greeting
 			if ($hour >= 5 && $hour < 12) {
-				$greeting = "Good morning, {$user->full_name}!";
+				$timeGreeting = "Good morning";
 			} elseif ($hour >= 12 && $hour < 17) {
-				$greeting = "Good afternoon, {$user->full_name}!";
+				$timeGreeting = "Good afternoon";
 			} else {
-				$greeting = "Good evening, {$user->full_name}!";
+				$timeGreeting = "Good evening";
 			}
+
+			// Construct greeting message
+			if ($isFirstLogin) {
+				$greeting = "Welcome, {$user->full_name}! We're glad to have you onboard.";
+			} else {
+				$greeting = "{$timeGreeting}, {$user->full_name}!";
+			}
+
+			// Update the user's last login timestamp
+			// $user->update(['last_login_at' => $currentTime]);
+
 			return $this->sendResponse([
 				'greeting' => $greeting,
+				'isFirstLogin' => $isFirstLogin,
+				// 'lastLogin' => $user->last_login_at,
 			], 'Greetings');
 		} catch (\Illuminate\Validation\ValidationException $e) {
 			return $this->sendError('Validation Error', $e->errors(), 422);
