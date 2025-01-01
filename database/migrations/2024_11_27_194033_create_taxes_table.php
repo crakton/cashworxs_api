@@ -12,8 +12,8 @@ return new class extends Migration
 	public function up(): void
 	{
 		Schema::create('taxes', function (Blueprint $table) {
-			$table->uuid('id')->primary();
-			$table->foreignUuid('user_id')->nullable();
+			$table->ulid('id')->primary();
+			$table->foreignUlid('user_id')->nullable();
 			$table->string('tax_type');
 			$table->string('tax_name');
 			$table->integer('tax_year');

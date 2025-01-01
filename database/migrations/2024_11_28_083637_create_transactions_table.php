@@ -12,8 +12,8 @@ return new class extends Migration
 	public function up(): void
 	{
 		Schema::create('transactions', function (Blueprint $table) {
-			$table->uuid('id')->primary();
-			$table->foreignUuid('user_id')->nullable();
+			$table->ulid('id')->primary();
+			$table->foreignUlid('user_id')->nullable();
 			$table->string('transaction_type');
 			$table->string('transaction_name');
 			$table->integer('transaction_amount');

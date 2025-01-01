@@ -12,8 +12,8 @@ return new class extends Migration
 	public function up(): void
 	{
 		Schema::create('sessions', function (Blueprint $table) {
-			$table->uuid('id')->primary();
-			$table->foreignUuid('user_id')->nullable();
+			$table->ulid('id')->primary();
+			$table->foreignUlid('user_id')->nullable();
 			$table->string('ip_address', 45)->nullable();
 			$table->text('user_agent')->nullable();
 			$table->longText('payload');

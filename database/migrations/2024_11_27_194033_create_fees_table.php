@@ -12,8 +12,8 @@ return new class extends Migration
 	public function up(): void
 	{
 		Schema::create('fees', function (Blueprint $table) {
-			$table->uuid('id')->primary();
-			$table->foreignUuid('user_id')->nullable();
+			$table->ulid('id')->primary();
+			$table->foreignUlid('user_id')->nullable();
 			$table->string('fee_type');
 			$table->string('fee_name');
 			$table->integer('fee_amount');
