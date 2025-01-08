@@ -111,6 +111,7 @@ Route::prefix('services')->group(function () {
 
 //only meant for testing
 Route::delete('users-smackdown', [UserController::class, 'smackUserDB']);
+Route::delete('user-smackdown', [UserController::class, 'smackUser']);
 
 Route::fallback(function (Request $request) {
 	return response()->json([

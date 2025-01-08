@@ -34,23 +34,28 @@ class SettingsController extends BaseController
             $languages = [
                 [
                     'key' => 'en',
-                    'name' => 'English',
+                    'name' => 'English Lanugage',
                     'short_name' => 'EN'
                 ],
                 [
-                    'key' => 'ig',
-                    'name' => 'Igbo',
-                    'short_name' => 'IG'
+                    'key' => 'ha',
+                    'name' => 'Harshen Hausa',
+                    'short_name' => 'HA'
                 ],
                 [
                     'key' => 'yo',
-                    'name' => 'Yoruba',
+                    'name' => 'Ede Yoruba',
                     'short_name' => 'YO'
                 ],
                 [
-                    'key' => 'ha',
-                    'name' => 'Hausa',
-                    'short_name' => 'HA'
+                    'key' => 'ig',
+                    'name' => 'Asusu Igbo',
+                    'short_name' => 'IG'
+                ],
+                [
+                    'key' => 'pi',
+                    'name' => 'Pidgin English',
+                    'short_name' => 'PI'
                 ],
             ];
 

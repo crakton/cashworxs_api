@@ -125,6 +125,22 @@ class UserController extends BaseController
 			return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
 		}
 	}
+	public function smackUser(Request $request)
+	{
+		try {
+			// remove user record on the the users table
+			$request->validate([
+				'user_id' => 'required|string'
+			]);
+
+			User::where('id', $request->user_id)->delete();
+			return $this->sendResponse('User KO!');
+		} catch (\Illuminate\Validation\ValidationException $e) {
+			return $this->sendError('Validation Error', $e->errors(), 422);
+		} catch (\Exception $e) {
+			return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+		}
+	}
 
 	public function getAllTransactions(Request $request)
 	{
