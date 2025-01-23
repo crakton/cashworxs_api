@@ -15,7 +15,7 @@ use App\Http\Controllers\User\UserController;
 // onboarding
 Route::prefix('onboarding')->group(function () {
 	Route::get('', [OnboardingController::class, 'index']);
-	Route::middleware(['auth:api', 'auth:admin'])->group(function () {
+	Route::middleware(['api', 'auth:admin'])->group(function () {
 		Route::post('/add', [OnboardingController::class, 'addChecklist']);
 		Route::put('/update/{id}', [OnboardingController::class, 'updateChecklist']);
 	});
@@ -32,9 +32,16 @@ Route::prefix('auth')->group(function () {
 	Route::post('otp/verify', [AuthController::class, 'verifyOTP']);
 
 	// protected routes requires authentication
-	Route::middleware(['auth:api', 'auth:admin'])->group(function () {
+	Route::middleware(['api', 'auth:admin'])->group(function () {
 		//verification
 		Route::post('logout', [AuthController::class, 'logout']);
+	});
+});
+
+Route::middleware(['api', 'auth:admin'])->group(function () {
+	Route::prefix('transactions')->group(function () {
+
+		Route::get('user', [UserController::class, 'getAllTransactions']);
 	});
 });
 
@@ -45,9 +52,8 @@ Route::prefix('users')->group(function () {
 	Route::get('', [UserController::class, 'getAllUsers']);
 
 	// protected user routes
-	Route::middleware(['auth:api', 'auth:admin'])->group(function () {
+	Route::middleware(['api', 'auth:admin'])->group(function () {
 		Route::get('greeting', [UserController::class, 'greetUser']);
-		Route::get('transactions', [UserController::class, 'getAllTransactions']);
 		Route::delete('{id}', [UserController::class, 'dropUser']);
 		Route::put('{id}', [UserController::class, 'updateUser']);
 		// user activities (taxes and fees)
@@ -69,7 +75,7 @@ Route::prefix('platforms')->group(function () {
 	Route::get('states', [SettingsController::class, 'getStates']);
 	Route::get('payment-options', [PaymentController::class, 'paymentOptions']);
 
-	Route::middleware(['auth:api', 'auth:admin'])->group(function () {
+	Route::middleware(['api', 'auth:admin'])->group(function () {
 		Route::post('payment/tax', [PaymentController::class, 'processTaxPayment']);
 		Route::post('payment/fee', [PaymentController::class, 'processFeePayment']);
 	});
@@ -79,7 +85,7 @@ Route::prefix('platforms')->group(function () {
 Route::prefix('settings')->group(function () {
 	Route::get('languages', [SettingsController::class, 'getLanguages']);
 
-	Route::middleware(['auth:api', 'auth:admin'])->group(function () {
+	Route::middleware(['api', 'auth:admin'])->group(function () {
 		Route::post('language', [SettingsController::class, 'updateLanguage']);
 		Route::get('language', [SettingsController::class, 'getLanguage']);
 	});
@@ -95,7 +101,7 @@ Route::prefix('services')->group(function () {
 	Route::get('fees', [ServiceFeesController::class, 'getServiceFees']);
 	Route::get('taxes', [ServiceTaxesController::class, 'getServiceTaxes']);
 	// Fees & Taxes services
-	Route::middleware(['auth:api', 'auth:admin'])->group(function () {});
+	Route::middleware(['api', 'auth:admin'])->group(function () {});
 	// Only admin services privilge
 	Route::middleware('auth:admin')->group(function () {
 		// fees

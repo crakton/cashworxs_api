@@ -17,17 +17,28 @@ class SettingsController extends BaseController
             ]);
 
             $user = $request->user();
-            $settings = Setting::where('user_id', $user->id)->first();
-            $settings->language = [$request->language, $request->key];
-            $settings->save();
 
-            return $this->sendResponse([$settings->language], 'Language updated successfully');
+            // Convert language details to JSON
+            $languageData = json_encode([
+                'key' => $request->key,
+                'name' => $request->language,
+            ]);
+
+            // Update or create settings record
+            $settings = Setting::updateOrCreate(
+                ['user_id' => $user->id], // Match condition
+                ['language' => $languageData] // Update data
+            );
+
+            return $this->sendResponse(json_decode($settings->language), 'Language updated successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
         } catch (\Exception $e) {
             return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
         }
     }
+
+
     public function getLanguages(Request $request)
     {
         try {

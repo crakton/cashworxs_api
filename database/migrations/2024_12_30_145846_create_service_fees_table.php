@@ -17,9 +17,10 @@ return new class extends Migration
             $table->string('type');
             $table->string('state');
             $table->decimal('amount', 10, 2);
+            $table->boolean('status');
             $table->text('description')->nullable();
-            $table->boolean('status')->default(true);
             $table->json('metadata')->nullable();
+            $table->foreignUlid('organization_id')->constrained('organizations')->cascadeOnDelete();
             $table->timestamps();
         });
     }

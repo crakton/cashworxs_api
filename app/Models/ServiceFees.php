@@ -14,16 +14,31 @@ class ServiceFees extends Model
 	protected $table = 'service_fees';
 	protected $fillable = [
 		'id',
+		'name',
 		'type',
 		'state',
-		'name',
 		'amount',
 		'status',
 		'description',
-		'metadata'
+		'metadata',
+		'organization_id',
 	];
 
+	// // Don't disclose this
+	protected $hidden = [
+		'organization_id'
+	];
+	// Cast the metadata field to JSON
 	protected $casts = [
 		'metadata' => 'array',
 	];
+
+	/**
+	 * Define the relationship between Service and Organization.
+	 * A service belongs to an organization.
+	 */
+	public function organization()
+	{
+		return $this->belongsTo(Organization::class);
+	}
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Models\Organization;
 use App\Models\ServiceFees;
 use Illuminate\Http\Request;
 
@@ -11,12 +12,14 @@ class ServiceFeesController extends BaseController
   public function getServiceFees()
   {
     try {
-      $fees = ServiceFees::all();
-      return $this->sendResponse(['fees' => $fees]);
+      // Fetch organizations with their related services
+      $organizations = Organization::with('services')->get();
+      return $this->sendResponse(['fees' => $organizations], 'List of services supported');
     } catch (\Exception $e) {
       return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
     }
   }
+
 
   public function createServiceFee(Request $request)
   {

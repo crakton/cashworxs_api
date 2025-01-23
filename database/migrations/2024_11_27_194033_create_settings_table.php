@@ -14,9 +14,9 @@ return new class extends Migration
 		Schema::create('settings', function (Blueprint $table) {
 			$table->ulid('id')->primary();
 			$table->foreignUlid('user_id')->nullable();
-			$table->string('language');
-			$table->string('currency');
-			$table->integer('complete_status');
+			$table->json('language')->nullable();
+			$table->string('currency')->nullable();
+			$table->boolean('complete_status')->nullable();
 			$table->timestamps();
 		});
 	}
