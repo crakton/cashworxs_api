@@ -46,4 +46,9 @@ return [
         'redirect' => env('APPLE_REDIRECT_URI'),
     ],
 
+    'payment_gateway' => [
+        'key' => env('PAYMENT_GATEWAY_KEY'),
+        'secret' => env('PAYMENT_GATEWAY_SECRET'),
+    ],
+
 ];

@@ -35,8 +35,12 @@ class User extends Authenticatable implements JWTSubject
 	];
 
 	protected $casts = [
-		'phone_verified_at' => 'datetime'
+		'phone_verified_at' => 'datetime',
+		'email_verified_at' => 'datetime',
+		'verified' => 'boolean',
+		'is_admin' => 'boolean'
 	];
+
 
 	// Get the identifier that will be stored in the subject claim of the JWT
 	public function getJWTIdentifier()

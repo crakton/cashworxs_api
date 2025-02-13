@@ -72,12 +72,10 @@ Route::prefix('users')->group(function () {
 
 // platforms
 Route::prefix('platforms')->group(function () {
-	Route::get('states', [SettingsController::class, 'getStates']);
-	Route::get('payment-options', [PaymentController::class, 'paymentOptions']);
-
-	Route::middleware(['api', 'auth:admin'])->group(function () {
-		Route::post('payment/tax', [PaymentController::class, 'processTaxPayment']);
-		Route::post('payment/fee', [PaymentController::class, 'processFeePayment']);
+	Route::middleware('auth:api')->group(function () {
+		Route::post('invoices', [PaymentController::class, 'createInvoice']);
+		Route::post('payments', [PaymentController::class, 'processPayment']);
+		Route::get('payments/{invoice_number}', [PaymentController::class, 'getPayment']);
 	});
 });
 
@@ -94,7 +92,7 @@ Route::prefix('settings')->group(function () {
 //oauth
 Route::prefix('auth/oauth')->group(function () {
 	// Route::get('{provider}', [OAuthController::class, 'redirectToProvider']);
-	Route::get('{provider}/callback', [OAuthController::class, 'handleProviderCallback']);
+	// Route::get('{provider}/callback', [OAuthController::class, 'handleProviderCallback']);
 });
 
 Route::prefix('services')->group(function () {
