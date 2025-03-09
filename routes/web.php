@@ -2,13 +2,23 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Route::get('/', function () {
+//     return view('welcome');
+// });
 
-// Single entry point for admin dashboard
+// Entry point for admin dashboard
 Route::prefix('app')->group(function () {
-    Route::get('{any?}', function () {
+    Route::get('', function () {
         return view('admin.app');
-    })->where('any', '.*')->name('admin.dashboard');
+    })->name('app');
+
+    Route::get('payments', function () {
+        return view('admin.pages.payments');
+    })->name('payments');
+    Route::get('login', function () {
+        return view('admin.pages.auth.login');
+    })->name('login');
+    Route::get('dashboard', function () {
+        return view('admin.pages.dashboard')->name('dashboard');
+    });
 });

@@ -72,11 +72,16 @@ Route::prefix('users')->group(function () {
 
 // platforms
 Route::prefix('platforms')->group(function () {
-	Route::middleware('auth:api')->group(function () {
-		Route::post('invoices', [PaymentController::class, 'createInvoice']);
-		Route::post('payments', [PaymentController::class, 'processPayment']);
-		Route::get('payments/{invoice_number}', [PaymentController::class, 'getPayment']);
+	Route::middleware(['api', 'auth:admin'])->group(function () {
+		Route::post('/invoices', [PaymentController::class, 'createInvoice']);
+
+		// Payment Routes
+		Route::post('/payments', [PaymentController::class, 'processPayment']);
+		Route::get('/payments', [PaymentController::class, 'getAllPayments']);
+		Route::get('/payments/user', [PaymentController::class, 'getPayments']);
+		Route::get('/payments/{invoiceNumber}', [PaymentController::class, 'getPayment']);
 	});
+	Route::get('states', [SettingsController::class, 'getStates']);
 });
 
 // settings
@@ -84,6 +89,8 @@ Route::prefix('settings')->group(function () {
 	Route::get('languages', [SettingsController::class, 'getLanguages']);
 
 	Route::middleware(['api', 'auth:admin'])->group(function () {
+		Route::get('', [SettingsController::class, 'getSettings']);
+		Route::post('', [SettingsController::class, 'updateSettings']);
 		Route::post('language', [SettingsController::class, 'updateLanguage']);
 		Route::get('language', [SettingsController::class, 'getLanguage']);
 	});
@@ -116,10 +123,3 @@ Route::prefix('services')->group(function () {
 //only meant for testing
 Route::delete('users-smackdown', [UserController::class, 'smackUserDB']);
 Route::delete('user-smackdown', [UserController::class, 'smackUser']);
-
-Route::fallback(function (Request $request) {
-	return response()->json([
-		'error' => 'Route not found',
-		'path' => $request->path(),
-	], 404);
-});

@@ -16,7 +16,7 @@ class AdminSeeder extends Seeder
     {
         User::create([
             'full_name' => 'Crakton ',
-            'phone_number' => '09034847432',
+            'phone_number' => '08081646633',
             'password' => Hash::make('Truth212.'),
             'is_admin' => true,
             'verified' => true,

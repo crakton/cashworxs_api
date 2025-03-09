@@ -16,6 +16,11 @@ return new class extends Migration
 			$table->string('full_name');
 			$table->string('phone_number')->uniqid()->max(11);
 			$table->string('password');
+			$table->string('provider')->nullable();
+			$table->string('provider_id')->nullable();
+			$table->boolean('verified')->default(false);
+			$table->boolean('is_admin')->default(false);
+			$table->timestamp('last_login_at')->nullable();
 			$table->timestamp('phone_verified_at')->nullable();
 			$table->rememberToken();
 			$table->timestamps();

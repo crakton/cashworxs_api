@@ -13,6 +13,12 @@ return new class extends Migration
 	{
 		Schema::create('settings', function (Blueprint $table) {
 			$table->ulid('id')->primary();
+			$table->string('nin')->unique()->nullable();
+			$table->string('irs_no')->unique()->nullable();
+			$table->string('bvn')->unique()->nullable();
+			$table->string('address')->unique()->nullable();
+			$table->string('state')->unique()->nullable();
+			$table->string('email')->unique()->nullable();
 			$table->foreignUlid('user_id')->nullable();
 			$table->json('language')->nullable();
 			$table->string('currency')->nullable();

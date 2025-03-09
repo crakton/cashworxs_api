@@ -17,5 +17,11 @@ class Setting extends Model
 	protected $fillable = [
 		'user_id',
 		'language',
+		'nin',
+		'irs_no',
+		'bvn',
+		'address',
+		'email',
+		'state'
 	];
 }

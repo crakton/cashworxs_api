@@ -17,7 +17,7 @@ class AuthController extends BaseController
 
     public function __construct()
     {
-        $this->middleware('auth:api', ['except' => ['login', 'register', 'forgotPassword', 'resetPassword', 'sendOTP', 'verifyOTP']]);
+        $this->middleware(['auth:api', 'auth:admin'], ['except' => ['login', 'register', 'forgotPassword', 'resetPassword', 'sendOTP', 'verifyOTP']]);
     }
     public function register(Request $request)
     {
@@ -65,12 +65,12 @@ class AuthController extends BaseController
             // Generate OTP
             $otp = rand(100000, 999999);
 
-            // Store OTP and token in cache for 5 minutes
+            // Store OTP and token in cache for 24 hours (in minutes)
             $token = Str::random(60);
             Cache::put(
                 "otp_{$request->phone_number}",
                 ['otp' => $otp, 'token' => $token],
-                300
+                1440
             );
 
             // Prepare parameters
@@ -92,57 +92,57 @@ class AuthController extends BaseController
                 "from" => "careposting"
             ];
 
-            $curl = curl_init();
+            // $curl = curl_init();
 
-            $post_data = json_encode($payload);
+            // $post_data = json_encode($payload);
 
-            curl_setopt_array($curl, array(
-                CURLOPT_URL => "https://api.ng.termii.com/api/sms/send",
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_ENCODING => "",
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_TIMEOUT => 0,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-                CURLOPT_CUSTOMREQUEST => "POST",
-                CURLOPT_POSTFIELDS => $post_data,
-                CURLOPT_HTTPHEADER => array(
-                    "Content-Type: application/json"
-                ),
-            ));
+            // curl_setopt_array($curl, array(
+            //     CURLOPT_URL => "https://api.ng.termii.com/api/sms/send",
+            //     CURLOPT_RETURNTRANSFER => true,
+            //     CURLOPT_ENCODING => "",
+            //     CURLOPT_MAXREDIRS => 10,
+            //     CURLOPT_TIMEOUT => 0,
+            //     CURLOPT_FOLLOWLOCATION => true,
+            //     CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            //     CURLOPT_CUSTOMREQUEST => "POST",
+            //     CURLOPT_POSTFIELDS => $post_data,
+            //     CURLOPT_HTTPHEADER => array(
+            //         "Content-Type: application/json"
+            //     ),
+            // ));
 
-            $response = curl_exec($curl);
+            // $response = curl_exec($curl);
 
-            \Log::info('Termii Response: ' . $response);
+            // \Log::info('Termii Response: ' . $response);
 
-            curl_close($curl);
+            // curl_close($curl);
 
-            if ($response) {
-                return $this->sendResponse([
-                    'token' => $token,
-                    // 'debug_otp' => $otp // REMOVE IN PRODUCTION
-                ], 'OTP sent successfully');
-            } else {
-                return $this->sendError('Failed to send OTP');
-            }
-
-
-            // $response = Http::withHeaders([
-            //     'Content-Type' => 'application/json',
-            // ])->post($url, $payload);
-
-            // \Log::info('Termii Response: ' . $response->body());
-
-            // if ($response->successful()) {
+            // if ($response) {
             //     return $this->sendResponse([
             //         'token' => $token,
-            //         // 'debug_otp' => $otp // REMOVE IN PRODUCTION
+            //         'debug_otp' => $otp // REMOVE IN PRODUCTION
             //     ], 'OTP sent successfully');
             // } else {
-            //     return $this->sendError('Failed to send OTP', [
-            //         'error' => $response->body()
-            //     ], $response->status());
+            //     return $this->sendError('Failed to send OTP');
             // }
+
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post($url, $payload);
+
+            \Log::info('Termii Response: ' . $response->body());
+
+            if ($response->successful()) {
+                return $this->sendResponse([
+                    'token' => $token,
+                    'debug_otp' => $otp // REMOVE IN PRODUCTION
+                ], 'OTP sent successfully');
+            } else {
+                return $this->sendError('Failed to send OTP', [
+                    'error' => $response->body()
+                ], $response->status());
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
         } catch (\Exception $e) {

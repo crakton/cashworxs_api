@@ -8,6 +8,59 @@ use Illuminate\Http\Request;
 
 class SettingsController extends BaseController
 {
+    public function updateSettings(Request $request)
+    {
+        try {
+            $request->validate([
+                'nin' => 'nullable|string',
+                'irs_no' => 'nullable|string',
+                'bvn' => 'nullable|string',
+                'address' => 'nullable|string',
+                'email' => 'nullable|string',
+                'state' => 'nullable|string'
+            ]);
+
+            $user = $request->user();
+
+            $updateData = [];
+
+            // Update other fields if present
+            foreach (['nin', 'irs_no', 'bvn', 'address', 'email', 'state'] as $field) {
+                if ($request->filled($field)) {
+                    $updateData[$field] = $request->$field;
+                }
+            }
+
+            // Ensure there's data to update
+            if (empty($updateData)) {
+                return $this->sendError('No valid data provided for update', [], 400);
+            }
+
+            // Update or create the settings record
+            $settings = Setting::updateOrCreate(
+                ['user_id' => $user->id], // Match condition
+                $updateData // Update data
+            );
+
+            return $this->sendResponse($settings, 'Settings updated successfully');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->sendError('Validation Error', $e->errors(), 422);
+        } catch (\Exception $e) {
+            return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function getSettings(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $settings = Setting::where('user_id', $user->id)->first();
+            return $this->sendResponse($settings, 'Settings', 200);
+        } catch (\Exception $e) {
+            return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+        }
+    }
+
     public function updateLanguage(Request $request)
     {
         try {
@@ -19,7 +72,7 @@ class SettingsController extends BaseController
             $user = $request->user();
 
             // Convert language details to JSON
-            $languageData = json_encode([
+            $languageData = \json_encode([
                 'key' => $request->key,
                 'name' => $request->language,
             ]);
