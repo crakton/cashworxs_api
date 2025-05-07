@@ -56,6 +56,15 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
         ],
+		'backblaze' => [
+        'driver' => 's3',
+        'key' => env('BACKBLAZE_KEY_ID'),
+        'secret' => env('BACKBLAZE_APPLICATION_KEY'),
+        'endpoint' => env('BACKBLAZE_ENDPOINT', 'https://s3.eu-central-003.backblazeb2.com'),
+        'bucket' => env('BACKBLAZE_BUCKET'),
+        'region' => env('BACKBLAZE_REGION', 'eu-central-001'),
+        'use_path_style_endpoint' => true,
+    ],
 
     ],
 

@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -20,9 +19,15 @@ class Payment extends Model
         'amount',
         'note',
         'status',
-        'log_time'
+        'log_time',
+        // Custom fields
+        'year_of_assessment',
+        'irs_id',
+        'irs_name',
+        'tax_type',
+        'fullname',
+        'custom_fields'
     ];
-
 
     // Explicitly set the primary key to 'id'
     protected $primaryKey = 'id';
@@ -39,6 +44,8 @@ class Payment extends Model
         'tdate' => 'datetime',
         'log_time' => 'datetime',
         'amount' => 'decimal:2',
+        'custom_fields' => 'array',
+        'year_of_assessment' => 'integer'
     ];
 
     /**

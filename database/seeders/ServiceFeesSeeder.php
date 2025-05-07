@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Organization;
-use App\Models\Service;
 use App\Models\ServiceFees;
 
 class ServiceFeesSeeder extends Seeder

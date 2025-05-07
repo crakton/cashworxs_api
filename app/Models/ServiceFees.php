@@ -24,13 +24,15 @@ class ServiceFees extends Model
 		'organization_id',
 	];
 
-	// // Don't disclose this
-	protected $hidden = [
-		'organization_id'
-	];
-	// Cast the metadata field to JSON
+	// Remove organization_id from hidden
+	// We need it to be visible for proper relationship handling
+	protected $hidden = [];
+
+	// Cast the metadata field to JSON and status to boolean
 	protected $casts = [
+		'status' => 'boolean',
 		'metadata' => 'array',
+		'amount' => 'float'
 	];
 
 	/**

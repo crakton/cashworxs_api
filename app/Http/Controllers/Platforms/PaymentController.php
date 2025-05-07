@@ -49,7 +49,7 @@ class PaymentController extends BaseController
     public function createInvoice(Request $request)
     {
         try {
-            // Validate the incoming request
+            // Validate the incoming request including our custom fields
             $validated = $request->validate([
                 'tdate' => 'required|string',
                 'note' => 'nullable|string',
@@ -67,14 +67,45 @@ class PaymentController extends BaseController
                 'items.*.note' => 'nullable|string',
                 'items.*.i_type' => 'nullable|string',
                 'items.*.i_org' => 'nullable|string',
+                // Custom fields validation
+                'year_of_assessment' => 'nullable|integer',
+                'irs_id' => 'nullable|string',
+                'irs_name' => 'nullable|string',
+                'tax_type' => 'nullable|string',
+                'fullname' => 'nullable|string',
+                'custom_fields' => 'nullable|array',
             ]);
 
-            // Make API request to Cashworx payment gateway
+            // Extract only the fields needed for the API request
+            $apiRequestData = array_filter($validated, function ($key) {
+                return !in_array($key, [
+                    'year_of_assessment',
+                    'irs_id',
+                    'irs_name',
+                    'tax_type',
+                    'fullname',
+                    'custom_fields'
+                ]);
+            }, ARRAY_FILTER_USE_KEY);
+
+            // Store custom fields separately
+            $customFields = array_filter($validated, function ($key) {
+                return in_array($key, [
+                    'year_of_assessment',
+                    'irs_id',
+                    'irs_name',
+                    'tax_type',
+                    'fullname',
+                    'custom_fields'
+                ]);
+            }, ARRAY_FILTER_USE_KEY);
+
+            // Make API request to Cashworx payment gateway with filtered data
             $response = Http::withToken($this->bearerToken)
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
-                ->post($this->apiBaseUrl . '/invoices', $validated);
+                ->post($this->apiBaseUrl . '/invoices', $apiRequestData);
 
             // Handle the response
             if ($response->successful()) {
@@ -89,9 +120,12 @@ class PaymentController extends BaseController
                 // Get user_id from the authenticated user
                 $user_id = $request->user()->id;
 
+                // Merge custom fields with invoice data
+                $invoiceDataWithCustomFields = array_merge($invoiceData, $customFields);
+
                 // Store invoice in local database with debugging
                 try {
-                    $invoice = $this->storeInvoiceInDatabase($invoiceData, $user_id);
+                    $invoice = $this->storeInvoiceInDatabase($invoiceDataWithCustomFields, $user_id);
 
                     return $this->sendResponse(
                         $invoice,
@@ -100,7 +134,7 @@ class PaymentController extends BaseController
                     );
                 } catch (\Exception $dbError) {
                     Log::error('Database error: ' . $dbError->getMessage());
-                    Log::error('Invoice data: ' . json_encode($invoiceData));
+                    Log::error('Invoice data: ' . json_encode($invoiceDataWithCustomFields));
                     throw $dbError;
                 }
             }
@@ -112,11 +146,33 @@ class PaymentController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('Invoice creation error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred while creating the invoice',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->sendError('An error occurred while creating the invoice', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get all invoices (with optional pagination)
+     */
+    public function getAllInvoices(Request $request)
+    {
+        $paginated = $request->query('paginated', false);
+        $endpoint = $paginated ? '/invoices/paginate' : '/invoices';
+
+        try {
+            $response = Http::withToken($this->bearerToken)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->get($this->apiBaseUrl . $endpoint);
+
+            if ($response->successful()) {
+                return $this->sendResponse($response->json());
+            }
+
+            return $this->sendError('Failed to retrieve invoices', $response->json(), $response->status());
+        } catch (\Exception $e) {
+            Log::error('Get invoices error: ' . $e->getMessage());
+            return $this->sendError('An error occurred while retrieving invoices', $e->getMessage(), 500);
         }
     }
 
@@ -135,6 +191,11 @@ class PaymentController extends BaseController
 
         // Log the data being inserted
         Log::debug('Creating invoice with data: ' . json_encode($invoiceData));
+
+        // Prepare custom_fields data if it's not already in the right format
+        if (isset($invoiceData['custom_fields']) && !is_array($invoiceData['custom_fields'])) {
+            $invoiceData['custom_fields'] = json_decode($invoiceData['custom_fields'], true) ?? [];
+        }
 
         // Create the invoice with explicit ID field and user_id
         $invoice = new Invoice();
@@ -155,6 +216,15 @@ class PaymentController extends BaseController
         $invoice->status = $invoiceData['status'];
         $invoice->note = $invoiceData['note'] ?? null;
         $invoice->log_time = $invoiceData['log_time'];
+
+        // Add custom fields
+        $invoice->year_of_assessment = $invoiceData['year_of_assessment'] ?? null;
+        $invoice->irs_id = $invoiceData['irs_id'] ?? null;
+        $invoice->irs_name = $invoiceData['irs_name'] ?? null;
+        $invoice->tax_type = $invoiceData['tax_type'] ?? null;
+        $invoice->fullname = $invoiceData['fullname'] ?? null;
+        $invoice->custom_fields = $invoiceData['custom_fields'] ?? null;
+
         $invoice->save();
 
         // If you need to store invoice items as well
@@ -175,26 +245,58 @@ class PaymentController extends BaseController
 
         return $invoice;
     }
+
     /**
      * Process payment for an invoice
      */
     public function processPayment(Request $request)
     {
         try {
-            // Validate the incoming request
+            // Validate the incoming request including custom fields
             $validated = $request->validate([
                 'invoice_number' => 'required|string',
                 'tdate' => 'required|string',
                 'amount' => 'required|numeric',
                 'receipt_no' => 'required|string',
+                // Custom fields validation
+                'year_of_assessment' => 'nullable|integer',
+                'irs_id' => 'nullable|string',
+                'irs_name' => 'nullable|string',
+                'tax_type' => 'nullable|string',
+                'fullname' => 'nullable|string',
+                'custom_fields' => 'nullable|array',
             ]);
+
+            // Extract only the fields needed for the API request
+            $apiRequestData = array_filter($validated, function ($key) {
+                return !in_array($key, [
+                    'year_of_assessment',
+                    'irs_id',
+                    'irs_name',
+                    'tax_type',
+                    'fullname',
+                    'custom_fields'
+                ]);
+            }, ARRAY_FILTER_USE_KEY);
+
+            // Store custom fields separately
+            $customFields = array_filter($validated, function ($key) {
+                return in_array($key, [
+                    'year_of_assessment',
+                    'irs_id',
+                    'irs_name',
+                    'tax_type',
+                    'fullname',
+                    'custom_fields'
+                ]);
+            }, ARRAY_FILTER_USE_KEY);
 
             // Make API request to Cashworx
             $response = Http::withToken($this->bearerToken)
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
-                ->post($this->apiBaseUrl . '/payments', $validated);
+                ->post($this->apiBaseUrl . '/payments', $apiRequestData);
 
             // Handle the response
             if ($response->successful()) {
@@ -206,12 +308,15 @@ class PaymentController extends BaseController
                 // Extract the payment data from the response
                 $paymentData = isset($responseData['payment']) ? $responseData['payment'] : $responseData;
 
+                // Merge custom fields with payment data
+                $paymentDataWithCustomFields = array_merge($paymentData, $customFields);
+
                 // Get user_id from the authenticated user
                 $user_id = $request->user()->id;
 
                 try {
                     // Store payment in local database
-                    $payment = $this->storePaymentInDatabase($paymentData, $user_id);
+                    $payment = $this->storePaymentInDatabase($paymentDataWithCustomFields, $user_id);
 
                     // Update invoice status
                     $this->updateInvoiceStatus($paymentData['invoice_number']);
@@ -223,7 +328,7 @@ class PaymentController extends BaseController
                     ], 201);
                 } catch (\Exception $dbError) {
                     Log::error('Payment database error: ' . $dbError->getMessage());
-                    Log::error('Payment data: ' . json_encode($paymentData));
+                    Log::error('Payment data: ' . json_encode($paymentDataWithCustomFields));
                     throw $dbError;
                 }
             }
@@ -252,6 +357,11 @@ class PaymentController extends BaseController
             // Generate a proper ULID for the ID
             $ulid = (string) \Illuminate\Support\Str::ulid();
 
+            // Prepare custom_fields data if it's not already in the right format
+            if (isset($paymentData['custom_fields']) && !is_array($paymentData['custom_fields'])) {
+                $paymentData['custom_fields'] = json_decode($paymentData['custom_fields'], true) ?? [];
+            }
+
             // Insert with proper ULID
             $payment = new Payment();
             $payment->id = $ulid;
@@ -263,6 +373,15 @@ class PaymentController extends BaseController
             $payment->note = $paymentData['note'] ?? null;
             $payment->status = $paymentData['status'] ?? 1;
             $payment->log_time = $paymentData['log_time'];
+
+            // Add custom fields
+            $payment->year_of_assessment = $paymentData['year_of_assessment'] ?? null;
+            $payment->irs_id = $paymentData['irs_id'] ?? null;
+            $payment->irs_name = $paymentData['irs_name'] ?? null;
+            $payment->tax_type = $paymentData['tax_type'] ?? null;
+            $payment->fullname = $paymentData['fullname'] ?? null;
+            $payment->custom_fields = $paymentData['custom_fields'] ?? null;
+
             $payment->save();
 
             return $payment;
@@ -369,7 +488,6 @@ class PaymentController extends BaseController
             $payments = Payment::where('user_id', $user->id)->get();
 
             return $this->sendResponse(
-
                 $payments,
                 "Payments retrieved successfully"
             );
@@ -378,6 +496,70 @@ class PaymentController extends BaseController
             return $this->sendError([
                 'success' => false,
                 'message' => 'An error occurred while retrieving payments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user invoices
+     *  */
+    public function getInvoices(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $invoices = Invoice::where('user_id', $user->id)->get();
+
+            return $this->sendResponse(
+                $invoices,
+                "Invoices retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get invoices error: ' . $e->getMessage());
+            return $this->sendError([
+                'success' => false,
+                'message' => 'An error occurred while retrieving invoices',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     *  Get a specific invoice by invoice number
+     */
+    public function getInvoice($invoiceNumber)
+    {
+        try {
+            // get db state invoice
+            $invoice = Invoice::where('invoice_number', $invoiceNumber)->first();
+
+            if (!$invoice) {
+                // get thirdparty state invoice
+                $endpoint = '/invoices/' . $invoiceNumber;
+                $response = Http::withToken($this->bearerToken)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->get($this->apiBaseUrl . $endpoint);
+                if ($response->successful()) {
+                    return $this->sendResponse(
+                        $response->json(),
+                        'Invoice',
+                    );
+                } else {
+                    return $this->sendError('Failed to retrieve invoice', $response->json(), $response->status());
+                }
+            }
+
+            return $this->sendResponse(
+                $invoice,
+                "Invoice retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get invoice error: ' . $e->getMessage());
+            return $this->sendError([
+                'success' => false,
+                'message' => 'An error occurred while retrieving the invoice',
                 'error' => $e->getMessage()
             ], 500);
         }

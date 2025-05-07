@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Api\BaseController;
-use App\Models\ServiceFees;
+use App\Models\ServiceTaxes;
 use Illuminate\Http\Request;
 
 class ServiceTaxesController extends BaseController
@@ -11,8 +11,18 @@ class ServiceTaxesController extends BaseController
   public function getServiceTaxes()
   {
     try {
-      $fees = ServiceFees::all();
-      return $this->sendResponse(['fees' => $fees]);
+      $taxes = ServiceTaxes::all();
+      return $this->sendResponse(['taxes' => $taxes]);
+    } catch (\Exception $e) {
+      return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+    }
+  }
+
+  public function getServiceTax($id)
+  {
+    try {
+      $tax = ServiceTaxes::findOrFail($id);
+      return $this->sendResponse(['tax' => $tax]);
     } catch (\Exception $e) {
       return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
     }
@@ -31,7 +41,7 @@ class ServiceTaxesController extends BaseController
         'metadata' => 'nullable|array',
       ]);
 
-      $fee = ServiceFees::create($request->all());
+      $fee = ServiceTaxes::create($request->all());
       return $this->sendResponse(['fee' => $fee], 'Service fee created', 201);
     } catch (\Exception $e) {
       return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
@@ -51,7 +61,7 @@ class ServiceTaxesController extends BaseController
         'metadata' => 'nullable|array',
       ]);
 
-      $fee = ServiceFees::findOrFail($id);
+      $fee = ServiceTaxes::findOrFail($id);
       $fee->update($request->all());
       return $this->sendResponse(['fee' => $fee], 'Service fee updated');
     } catch (\Exception $e) {
@@ -62,7 +72,7 @@ class ServiceTaxesController extends BaseController
   public function deleteServiceTax($id)
   {
     try {
-      ServiceFees::findOrFail($id)->delete();
+      ServiceTaxes::findOrFail($id)->delete();
       return $this->sendResponse([], 'Service fee deleted');
     } catch (\Exception $e) {
       return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);

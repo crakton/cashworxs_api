@@ -23,6 +23,32 @@ class OnboardingController extends BaseController
 		}
 	}
 
+	// edit specific onboarding section by it id
+	public function UpdateOnboardingSection(Request $request, $id)
+	{
+		try {
+			$validatedData = $request->validate([
+				'description' => 'nullable|string',
+				'image_url' => 'nullable|string',
+				'title' => 'nullable|string'
+			]);
+
+			// get onboarding stats and change the given data field (description, title,image_url)
+			$onboarding = Onboarding::find()->first()->update($validatedData);
+			$onboarding->save();
+
+			return $this->sendResponse($onboarding, 'Onboarding data updated successfully');
+		} catch (\Exception $e) {
+
+			return $this->sendError(
+				'Something went wrong',
+				['error' => $e->getMessage()],
+				500
+			);
+		}
+	}
+
+
 	public function addChecklist(Request $request)
 	{
 		$validatedData = $request->validate([
@@ -49,7 +75,6 @@ class OnboardingController extends BaseController
 			'bvn' => 'nullable|string|max:11',
 			'nin' => 'nullable|string|max:11',
 		]);
-
 		try {
 			$onboarding = Onboarding::findOrFail($id);
 			$onboarding->update($validatedData);

@@ -27,8 +27,16 @@ class Invoice extends Model
         'client_invoice_number',
         'status',
         'note',
-        'log_time'
+        'log_time',
+        // Custom fields
+        'year_of_assessment',
+        'irs_id',
+        'irs_name',
+        'tax_type',
+        'fullname',
+        'custom_fields'
     ];
+
     // Explicitly set the primary key to 'id'
     protected $primaryKey = 'id';
 
@@ -44,6 +52,8 @@ class Invoice extends Model
         'tdate' => 'datetime',
         'log_time' => 'datetime',
         'amount' => 'decimal:2',
+        'custom_fields' => 'array',
+        'year_of_assessment' => 'integer'
     ];
 
     /**
