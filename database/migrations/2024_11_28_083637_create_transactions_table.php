@@ -13,12 +13,13 @@ return new class extends Migration
 	{
 		Schema::create('transactions', function (Blueprint $table) {
 			$table->ulid('id')->primary();
-			$table->foreignUlid('user_id')->nullable();
-			$table->string('transaction_type');
+			$table->foreignUlid('user_id')->constrained()->onDelete('cascade');
+			$table->string('fullname')->nullable();
+			$table->string('transaction_type'); // invoice/payment
 			$table->string('transaction_name');
-			$table->integer('transaction_amount');
+			$table->decimal('transaction_amount', 10, 2);
 			$table->string('transaction_status');
-			$table->json('transaction_metadata');
+			$table->json('transaction_metadata')->nullable();
 			$table->timestamps();
 		});
 	}

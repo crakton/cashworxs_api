@@ -8,24 +8,19 @@ use Illuminate\Database\Eloquent\Model;
 
 class Transaction extends Model
 {
-    use HasUlids;
-    use HasFactory;
+    use HasUlids, HasFactory;
 
-    protected $table = 'transactions';
     protected $fillable = [
-        'transaction_status',
-        'transaction_ref',
-        'transaction_amount',
+        'user_id',
+        'fullname',
         'transaction_type',
         'transaction_name',
+        'transaction_amount',
+        'transaction_status',
+        'transaction_metadata'
     ];
-    public function fees()
-    {
-        return $this->hasMany(Fee::class);
-    }
 
-    public function taxes()
-    {
-        return $this->hasMany(Tax::class);
-    }
+    protected $casts = [
+        'transaction_metadata' => 'array'
+    ];
 }

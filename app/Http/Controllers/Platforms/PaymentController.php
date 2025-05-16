@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
+use App\Models\Transaction;
 use DB;
 use Illuminate\Support\Facades\Log;
 
@@ -36,6 +37,20 @@ class PaymentController extends BaseController
             return null;
         }
     }
+
+    private function recordTransaction($type, $user_id, $fullname, $amount, $status, $metadata = [])
+    {
+        return Transaction::create([
+            'user_id' => $user_id,
+            'fullname' => $fullname,
+            'transaction_type' => $type,
+            'transaction_name' => $type === 'invoice' ? 'Invoice Created' : 'Payment Processed',
+            'transaction_amount' => $amount,
+            'transaction_status' => $status,
+            'transaction_metadata' => $metadata
+        ]);
+    }
+
 
     public function __construct()
     {
@@ -242,6 +257,15 @@ class PaymentController extends BaseController
                 $invoiceItem->save();
             }
         }
+        // Record transaction
+        $this->recordTransaction(
+            'invoice',
+            $user_id,
+            $invoice->c_name,
+            $invoice->amount,
+            'pending',
+            ['invoice_number' => $invoice->invoice_number]
+        );
 
         return $invoice;
     }
@@ -320,6 +344,19 @@ class PaymentController extends BaseController
 
                     // Update invoice status
                     $this->updateInvoiceStatus($paymentData['invoice_number']);
+
+                    // Record transaction
+                    $this->recordTransaction(
+                        'payment',
+                        $user_id,
+                        $payment->fullname,
+                        $payment->amount,
+                        'completed',
+                        [
+                            'invoice_number' => $payment->invoice_number,
+                            'receipt_no' => $payment->receipt_no
+                        ]
+                    );
 
                     return response()->json([
                         'success' => true,
