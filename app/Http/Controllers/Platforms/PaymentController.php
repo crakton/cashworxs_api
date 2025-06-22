@@ -3,68 +3,32 @@
 namespace App\Http\Controllers\Platforms;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Services\PaymentGateways\PaymentService;
+use App\Services\PaymentGateways\PaymentGatewayManager;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\Transaction;
-use DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class PaymentController extends BaseController
 {
-    protected $apiBaseUrl;
-    protected $bearerToken;
+    protected $paymentService;
+    protected $gatewayManager;
 
-    private function authenticate()
+    public function __construct(PaymentService $paymentService, PaymentGatewayManager $gatewayManager)
     {
-        try {
-            $response = Http::post($this->apiBaseUrl . '/authenticate', [
-                'access_key' => '7AwUxeq96x49f542',
-                'access_secret' => 'DekEULYFNtMVrXll'
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data['data']['access_token'];
-            }
-
-            Log::error('Authentication failed: ' . $response->body());
-            return null;
-        } catch (\Exception $e) {
-            Log::error('Authentication error: ' . $e->getMessage());
-            return null;
-        }
-    }
-
-    private function recordTransaction($type, $user_id, $fullname, $amount, $status, $metadata = [])
-    {
-        return Transaction::create([
-            'user_id' => $user_id,
-            'fullname' => $fullname,
-            'transaction_type' => $type,
-            'transaction_name' => $type === 'invoice' ? 'Invoice Created' : 'Payment Processed',
-            'transaction_amount' => $amount,
-            'transaction_status' => $status,
-            'transaction_metadata' => $metadata
-        ]);
-    }
-
-
-    public function __construct()
-    {
-        $this->apiBaseUrl = 'https://server.inteliworxtest.com';
-        $this->bearerToken = $this->authenticate();
+        $this->paymentService = $paymentService;
+        $this->gatewayManager = $gatewayManager;
     }
 
     /**
-     * Create a new invoice using Cashworx API
+     * Create a new invoice with multi-gateway support
      */
     public function createInvoice(Request $request)
     {
         try {
-            // Validate the incoming request including our custom fields
             $validated = $request->validate([
                 'tdate' => 'required|string',
                 'note' => 'nullable|string',
@@ -82,207 +46,70 @@ class PaymentController extends BaseController
                 'items.*.note' => 'nullable|string',
                 'items.*.i_type' => 'nullable|string',
                 'items.*.i_org' => 'nullable|string',
-                // Custom fields validation
+                // Custom fields
                 'year_of_assessment' => 'nullable|integer',
                 'irs_id' => 'nullable|string',
                 'irs_name' => 'nullable|string',
                 'tax_type' => 'nullable|string',
                 'fullname' => 'nullable|string',
                 'custom_fields' => 'nullable|array',
+                // Gateway selection
+                'gateway' => 'nullable|string|in:' . implode(',', $this->gatewayManager->getAvailableGateways()),
+                'preferred_gateways' => 'nullable|array'
             ]);
 
-            // Extract only the fields needed for the API request
-            $apiRequestData = array_filter($validated, function ($key) {
-                return !in_array($key, [
-                    'year_of_assessment',
-                    'irs_id',
-                    'irs_name',
-                    'tax_type',
-                    'fullname',
-                    'custom_fields'
-                ]);
-            }, ARRAY_FILTER_USE_KEY);
+            // Add user ID to validated data
+            $validated['user_id'] = $request->user()->id;
 
-            // Store custom fields separately
-            $customFields = array_filter($validated, function ($key) {
-                return in_array($key, [
-                    'year_of_assessment',
-                    'irs_id',
-                    'irs_name',
-                    'tax_type',
-                    'fullname',
-                    'custom_fields'
-                ]);
-            }, ARRAY_FILTER_USE_KEY);
+            // Create invoice using the service
+            $result = $this->paymentService->createInvoice(
+                $validated,
+                $validated['gateway'] ?? null
+            );
 
-            // Make API request to Cashworx payment gateway with filtered data
-            $response = Http::withToken($this->bearerToken)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($this->apiBaseUrl . '/invoices', $apiRequestData);
-
-            // Handle the response
-            if ($response->successful()) {
-                $responseData = $response->json();
-
-                // Log the raw response to help with debugging
-                Log::debug('API Response: ' . json_encode($responseData));
-
-                // Extract the invoice data from the response
-                $invoiceData = isset($responseData['invoice']) ? $responseData['invoice'] : $responseData;
-
-                // Get user_id from the authenticated user
-                $user_id = $request->user()->id;
-
-                // Merge custom fields with invoice data
-                $invoiceDataWithCustomFields = array_merge($invoiceData, $customFields);
-
-                // Store invoice in local database with debugging
-                try {
-                    $invoice = $this->storeInvoiceInDatabase($invoiceDataWithCustomFields, $user_id);
-
-                    return $this->sendResponse(
-                        $invoice,
-                        'Invoice created successfully',
-                        201
-                    );
-                } catch (\Exception $dbError) {
-                    Log::error('Database error: ' . $dbError->getMessage());
-                    Log::error('Invoice data: ' . json_encode($invoiceDataWithCustomFields));
-                    throw $dbError;
-                }
+            if ($result['success']) {
+                return $this->sendResponse(
+                    [
+                        'invoice' => $result['invoice'],
+                        'gateway_response' => $result['gateway_response'],
+                        'available_gateways' => $this->gatewayManager->getAvailableGateways()
+                    ],
+                    'Invoice created successfully',
+                    201
+                );
             }
 
             return $this->sendError(
-                $response->json(),
+                $result['error'],
                 'Failed to create invoice',
-                $response->status()
+                400
             );
+
         } catch (\Exception $e) {
             Log::error('Invoice creation error: ' . $e->getMessage());
-            return $this->sendError('An error occurred while creating the invoice', $e->getMessage(), 500);
+            return $this->sendError(
+                'An error occurred while creating the invoice',
+                $e->getMessage(),
+                500
+            );
         }
     }
 
     /**
-     * Get all invoices (with optional pagination)
-     */
-    public function getAllInvoices(Request $request)
-    {
-        $paginated = $request->query('paginated', false);
-        $endpoint = $paginated ? '/invoices/paginate' : '/invoices';
-
-        try {
-            $response = Http::withToken($this->bearerToken)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->get($this->apiBaseUrl . $endpoint);
-
-            if ($response->successful()) {
-                return $this->sendResponse($response->json());
-            }
-
-            return $this->sendError('Failed to retrieve invoices', $response->json(), $response->status());
-        } catch (\Exception $e) {
-            Log::error('Get invoices error: ' . $e->getMessage());
-            return $this->sendError('An error occurred while retrieving invoices', $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Store invoice data in the local database
-     */
-    private function storeInvoiceInDatabase($invoiceData, $user_id)
-    {
-        // Generate a UUID for the ID if it's not present in the API response
-        // This ensures we always have a value for the required ID field
-        if (!isset($invoiceData['id']) || empty($invoiceData['id'])) {
-            $invoiceData['id'] = (string) \Illuminate\Support\Str::uuid();
-        } else {
-            $invoiceData['id'] = (string) $invoiceData['id'];
-        }
-
-        // Log the data being inserted
-        Log::debug('Creating invoice with data: ' . json_encode($invoiceData));
-
-        // Prepare custom_fields data if it's not already in the right format
-        if (isset($invoiceData['custom_fields']) && !is_array($invoiceData['custom_fields'])) {
-            $invoiceData['custom_fields'] = json_decode($invoiceData['custom_fields'], true) ?? [];
-        }
-
-        // Create the invoice with explicit ID field and user_id
-        $invoice = new Invoice();
-        $invoice->id = $invoiceData['id'];
-        $invoice->user_id = $user_id;
-        $invoice->invoice_number = $invoiceData['invoice_number'];
-        $invoice->mda_id = $invoiceData['mda_id'];
-        $invoice->mda_code = $invoiceData['mda_code'];
-        $invoice->tdate = $invoiceData['tdate'];
-        $invoice->amount = $invoiceData['amount'];
-        $invoice->c_code = $invoiceData['c_code'];
-        $invoice->c_name = $invoiceData['c_name'];
-        $invoice->c_address = $invoiceData['c_address'];
-        $invoice->c_phone = $invoiceData['c_phone'];
-        $invoice->c_number = $invoiceData['c_number'];
-        $invoice->c_email = $invoiceData['c_email'];
-        $invoice->client_invoice_number = $invoiceData['client_invoice_number'] ?? null;
-        $invoice->status = $invoiceData['status'];
-        $invoice->note = $invoiceData['note'] ?? null;
-        $invoice->log_time = $invoiceData['log_time'];
-
-        // Add custom fields
-        $invoice->year_of_assessment = $invoiceData['year_of_assessment'] ?? null;
-        $invoice->irs_id = $invoiceData['irs_id'] ?? null;
-        $invoice->irs_name = $invoiceData['irs_name'] ?? null;
-        $invoice->tax_type = $invoiceData['tax_type'] ?? null;
-        $invoice->fullname = $invoiceData['fullname'] ?? null;
-        $invoice->custom_fields = $invoiceData['custom_fields'] ?? null;
-
-        $invoice->save();
-
-        // If you need to store invoice items as well
-        if (isset($invoiceData['items']) && count($invoiceData['items']) > 0) {
-            foreach ($invoiceData['items'] as $item) {
-                $invoiceItem = new InvoiceItem();
-                $invoiceItem->id = (string) ($item['id'] ?? \Illuminate\Support\Str::uuid());
-                $invoiceItem->invoice_id = $invoice->id;
-                $invoiceItem->i_code = $item['i_code'];
-                $invoiceItem->i_name = $item['i_name'];
-                $invoiceItem->i_amount = $item['i_amount'];
-                $invoiceItem->note = $item['note'] ?? null;
-                $invoiceItem->i_type = $item['i_type'] ?? null;
-                $invoiceItem->i_org = $item['i_org'] ?? null;
-                $invoiceItem->save();
-            }
-        }
-        // Record transaction
-        $this->recordTransaction(
-            'invoice',
-            $user_id,
-            $invoice->c_name,
-            $invoice->amount,
-            'pending',
-            ['invoice_number' => $invoice->invoice_number]
-        );
-
-        return $invoice;
-    }
-
-    /**
-     * Process payment for an invoice
+     * Process payment with multi-gateway support and fallback
      */
     public function processPayment(Request $request)
     {
         try {
-            // Validate the incoming request including custom fields
             $validated = $request->validate([
                 'invoice_number' => 'required|string',
                 'tdate' => 'required|string',
                 'amount' => 'required|numeric',
-                'receipt_no' => 'required|string',
-                // Custom fields validation
+                'receipt_no' => 'nullable|string',
+                'gateway' => 'nullable|string|in:' . implode(',', $this->gatewayManager->getAvailableGateways()),
+                'preferred_gateways' => 'nullable|array',
+                'payment_reference' => 'nullable|string', // For verification-based payments
+                // Custom fields
                 'year_of_assessment' => 'nullable|integer',
                 'irs_id' => 'nullable|string',
                 'irs_name' => 'nullable|string',
@@ -291,238 +118,163 @@ class PaymentController extends BaseController
                 'custom_fields' => 'nullable|array',
             ]);
 
-            // Extract only the fields needed for the API request
-            $apiRequestData = array_filter($validated, function ($key) {
-                return !in_array($key, [
-                    'year_of_assessment',
-                    'irs_id',
-                    'irs_name',
-                    'tax_type',
-                    'fullname',
-                    'custom_fields'
-                ]);
-            }, ARRAY_FILTER_USE_KEY);
+            // Add user ID
+            $validated['user_id'] = $request->user()->id;
 
-            // Store custom fields separately
-            $customFields = array_filter($validated, function ($key) {
-                return in_array($key, [
-                    'year_of_assessment',
-                    'irs_id',
-                    'irs_name',
-                    'tax_type',
-                    'fullname',
-                    'custom_fields'
-                ]);
-            }, ARRAY_FILTER_USE_KEY);
+            // Determine gateways to try
+            $gateways = $validated['preferred_gateways'] ?? 
+                       ($validated['gateway'] ? [$validated['gateway']] : null);
 
-            // Make API request to Cashworx
-            $response = Http::withToken($this->bearerToken)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->post($this->apiBaseUrl . '/payments', $apiRequestData);
+            // Process payment with fallback
+            $result = $this->paymentService->processPayment($validated, $gateways);
 
-            // Handle the response
-            if ($response->successful()) {
-                $responseData = $response->json();
-
-                // Log the raw response to help with debugging
-                Log::debug('Payment API Response: ' . json_encode($responseData));
-
-                // Extract the payment data from the response
-                $paymentData = isset($responseData['payment']) ? $responseData['payment'] : $responseData;
-
-                // Merge custom fields with payment data
-                $paymentDataWithCustomFields = array_merge($paymentData, $customFields);
-
-                // Get user_id from the authenticated user
-                $user_id = $request->user()->id;
-
-                try {
-                    // Store payment in local database
-                    $payment = $this->storePaymentInDatabase($paymentDataWithCustomFields, $user_id);
-
-                    // Update invoice status
-                    $this->updateInvoiceStatus($paymentData['invoice_number']);
-
-                    // Record transaction
-                    $this->recordTransaction(
-                        'payment',
-                        $user_id,
-                        $payment->fullname,
-                        $payment->amount,
-                        'completed',
-                        [
-                            'invoice_number' => $payment->invoice_number,
-                            'receipt_no' => $payment->receipt_no
-                        ]
-                    );
-
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Payment processed successfully',
-                        'data' => $payment
-                    ], 201);
-                } catch (\Exception $dbError) {
-                    Log::error('Payment database error: ' . $dbError->getMessage());
-                    Log::error('Payment data: ' . json_encode($paymentDataWithCustomFields));
-                    throw $dbError;
-                }
+            if ($result['success']) {
+                return $this->sendResponse(
+                    [
+                        'payment' => $result['payment'],
+                        'gateway_used' => $result['gateway']
+                    ],
+                    'Payment processed successfully',
+                    201
+                );
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to process payment',
-                'error' => $response->json()
-            ], $response->status());
+            return $this->sendError(
+                $result['error'],
+                'Payment processing failed',
+                400
+            );
+
         } catch (\Exception $e) {
             Log::error('Payment processing error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred while processing the payment',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->sendError(
+                'An error occurred while processing the payment',
+                $e->getMessage(),
+                500
+            );
         }
     }
 
     /**
-     * Store payment data in the local database
+     * Verify payment across gateways
      */
-    private function storePaymentInDatabase($paymentData, $user_id)
+    public function verifyPayment(Request $request)
     {
         try {
-            // Generate a proper ULID for the ID
-            $ulid = (string) \Illuminate\Support\Str::ulid();
+            $validated = $request->validate([
+                'reference' => 'required|string',
+                'gateway' => 'required|string|in:' . implode(',', $this->gatewayManager->getAvailableGateways())
+            ]);
 
-            // Prepare custom_fields data if it's not already in the right format
-            if (isset($paymentData['custom_fields']) && !is_array($paymentData['custom_fields'])) {
-                $paymentData['custom_fields'] = json_decode($paymentData['custom_fields'], true) ?? [];
+            $gateway = $this->gatewayManager->gateway($validated['gateway']);
+            $result = $gateway->verifyPayment($validated['reference']);
+
+            if ($result['success']) {
+                // Update local records if payment is successful
+                $this->updatePaymentStatus($validated['reference'], $result['data']);
+                
+                return $this->sendResponse(
+                    $result['data'],
+                    'Payment verified successfully'
+                );
             }
 
-            // Insert with proper ULID
-            $payment = new Payment();
-            $payment->id = $ulid;
-            $payment->user_id = $user_id;
-            $payment->invoice_number = $paymentData['invoice_number'];
-            $payment->receipt_no = $paymentData['receipt_no'];
-            $payment->tdate = $paymentData['tdate'];
-            $payment->amount = $paymentData['amount'];
-            $payment->note = $paymentData['note'] ?? null;
-            $payment->status = $paymentData['status'] ?? 1;
-            $payment->log_time = $paymentData['log_time'];
+            return $this->sendError(
+                $result['error'],
+                'Payment verification failed',
+                400
+            );
 
-            // Add custom fields
-            $payment->year_of_assessment = $paymentData['year_of_assessment'] ?? null;
-            $payment->irs_id = $paymentData['irs_id'] ?? null;
-            $payment->irs_name = $paymentData['irs_name'] ?? null;
-            $payment->tax_type = $paymentData['tax_type'] ?? null;
-            $payment->fullname = $paymentData['fullname'] ?? null;
-            $payment->custom_fields = $paymentData['custom_fields'] ?? null;
-
-            $payment->save();
-
-            return $payment;
         } catch (\Exception $e) {
-            Log::error('Payment insert error: ' . $e->getMessage());
-            throw $e;
+            Log::error('Payment verification error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while verifying the payment',
+                $e->getMessage(),
+                500
+            );
         }
     }
 
     /**
-     * Update the status of an invoice after payment
+     * Handle webhooks from different gateways
      */
-    private function updateInvoiceStatus($invoiceNumber)
-    {
-        $invoice = Invoice::where('invoice_number', $invoiceNumber)->first();
-
-        if ($invoice) {
-            $invoice->status = 1; // Assuming 1 is for 'paid' status
-            $invoice->save();
-            Log::info("Updated invoice {$invoiceNumber} status to paid");
-        } else {
-            Log::warning("Could not find invoice {$invoiceNumber} to update status");
-        }
-    }
-
-    /**
-     * Get all payments (with optional pagination)
-     */
-    public function getAllPayments(Request $request)
-    {
-        $paginated = $request->query('paginated', false);
-        $endpoint = $paginated ? '/payments/paginate' : '/payments';
-
-        try {
-            $response = Http::withToken($this->bearerToken)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->get($this->apiBaseUrl . $endpoint);
-
-            if ($response->successful()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => $response->json()
-                ]);
-            }
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve payments',
-                'error' => $response->json()
-            ], $response->status());
-        } catch (\Exception $e) {
-            Log::error('Get payments error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred while retrieving payments',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Get a specific payment by invoice number
-     */
-    public function getPayment($invoiceNumber)
+    public function handleWebhook(Request $request, string $gateway)
     {
         try {
-            $response = Http::withToken($this->bearerToken)
-                ->withHeaders([
-                    'Content-Type' => 'application/json',
-                ])
-                ->get($this->apiBaseUrl . '/payments/' . $invoiceNumber);
-
-            if ($response->successful()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => $response->json()
-                ]);
+            if (!in_array($gateway, $this->gatewayManager->getAvailableGateways())) {
+                return response()->json(['error' => 'Unsupported gateway'], 400);
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to retrieve payment',
-                'error' => $response->json()
-            ], $response->status());
+            $gatewayHandler = $this->gatewayManager->gateway($gateway);
+            $result = $gatewayHandler->webhookHandler($request->all());
+
+            if ($result['success']) {
+                // Process webhook data
+                $this->processWebhookData($result['data'], $gateway);
+                
+                return response()->json(['status' => 'success'], 200);
+            }
+
+            return response()->json(['error' => 'Webhook processing failed'], 400);
+
         } catch (\Exception $e) {
-            Log::error('Get payment error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'An error occurred while retrieving the payment',
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error("Webhook error for {$gateway}: " . $e->getMessage());
+            return response()->json(['error' => 'Webhook processing failed'], 500);
         }
     }
 
-    /* 
-        Get user payments
-    */
+    /**
+     * Get payment status across gateways
+     */
+    public function getPaymentStatus(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'reference' => 'required|string',
+                'gateway' => 'required|string|in:' . implode(',', $this->gatewayManager->getAvailableGateways())
+            ]);
+
+            $gateway = $this->gatewayManager->gateway($validated['gateway']);
+            $status = $gateway->getPaymentStatus($validated['reference']);
+
+            return $this->sendResponse(
+                ['status' => $status],
+                'Payment status retrieved successfully'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('Get payment status error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving payment status',
+                $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
+     * Get available payment gateways
+     */
+    public function getAvailableGateways()
+    {
+        return $this->sendResponse(
+            $this->gatewayManager->getAvailableGateways(),
+            'Available payment gateways'
+        );
+    }
+
+    /**
+     * Get user payments with gateway information
+     */
     public function getPayments(Request $request)
     {
         try {
             $user = $request->user();
-            $payments = Payment::where('user_id', $user->id)->get();
+            
+            $payments = Payment::where('user_id', $user->id)
+                ->with(['invoice', 'transactions'])
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             return $this->sendResponse(
                 $payments,
@@ -530,22 +282,26 @@ class PaymentController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('Get payments error: ' . $e->getMessage());
-            return $this->sendError([
-                'success' => false,
-                'message' => 'An error occurred while retrieving payments',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->sendError(
+                'An error occurred while retrieving payments',
+                $e->getMessage(),
+                500
+            );
         }
     }
 
     /**
      * Get user invoices
-     *  */
+     */
     public function getInvoices(Request $request)
     {
         try {
             $user = $request->user();
-            $invoices = Invoice::where('user_id', $user->id)->get();
+            
+            $invoices = Invoice::where('user_id', $user->id)
+                ->with(['items', 'payment', 'transactions'])
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             return $this->sendResponse(
                 $invoices,
@@ -553,52 +309,121 @@ class PaymentController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('Get invoices error: ' . $e->getMessage());
-            return $this->sendError([
-                'success' => false,
-                'message' => 'An error occurred while retrieving invoices',
-                'error' => $e->getMessage()
-            ], 500);
+            return $this->sendError(
+                'An error occurred while retrieving invoices',
+                $e->getMessage(),
+                500
+            );
         }
     }
 
     /**
-     *  Get a specific invoice by invoice number
+     * Get user transactions
      */
-    public function getInvoice($invoiceNumber)
+    public function getTransactions(Request $request)
     {
         try {
-            // get db state invoice
-            $invoice = Invoice::where('invoice_number', $invoiceNumber)->first();
-
-            if (!$invoice) {
-                // get thirdparty state invoice
-                $endpoint = '/invoices/' . $invoiceNumber;
-                $response = Http::withToken($this->bearerToken)
-                    ->withHeaders([
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->get($this->apiBaseUrl . $endpoint);
-                if ($response->successful()) {
-                    return $this->sendResponse(
-                        $response->json(),
-                        'Invoice',
-                    );
-                } else {
-                    return $this->sendError('Failed to retrieve invoice', $response->json(), $response->status());
-                }
-            }
+            $user = $request->user();
+            
+            $transactions = Transaction::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
 
             return $this->sendResponse(
-                $invoice,
-                "Invoice retrieved successfully"
+                $transactions,
+                "Transactions retrieved successfully"
             );
         } catch (\Exception $e) {
-            Log::error('Get invoice error: ' . $e->getMessage());
-            return $this->sendError([
-                'success' => false,
-                'message' => 'An error occurred while retrieving the invoice',
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error('Get transactions error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving transactions',
+                $e->getMessage(),
+                500
+            );
         }
+    }
+
+    /**
+     * Update payment status from gateway response
+     */
+    private function updatePaymentStatus(string $reference, array $data)
+    {
+        DB::transaction(function () use ($reference, $data) {
+            // Update payment record
+            $payment = Payment::where('receipt_no', $reference)
+                ->orWhere('payment_reference', $reference)
+                ->first();
+
+            if ($payment) {
+                $payment->update([
+                    'status' => $data['status'] ?? 'completed',
+                    'gateway_response' => $data
+                ]);
+
+                // Update related invoice
+                if ($payment->invoice_number) {
+                    $this->updateInvoiceStatus($payment->invoice_number, 'paid');
+                }
+
+                // Update transaction
+                Transaction::where('transaction_metadata->reference', $reference)
+                    ->update([
+                        'transaction_status' => 'completed',
+                        'transaction_metadata' => DB::raw("JSON_MERGE_PATCH(transaction_metadata, '" . json_encode($data) . "')")
+                    ]);
+            }
+        });
+    }
+
+    /**
+     * Process webhook data from different gateways
+     */
+    private function processWebhookData(array $data, string $gateway)
+    {
+        // Process based on gateway type
+        switch ($gateway) {
+            case 'paystack':
+                $this->processPaystackWebhook($data);
+                break;
+            case 'flutterwave':
+                $this->processFlutterwaveWebhook($data);
+                break;
+            case 'cashworx':
+                $this->processCashworxWebhook($data);
+                break;
+            default:
+                Log::warning("Unknown gateway webhook: {$gateway}");
+        }
+    }
+
+    private function processPaystackWebhook(array $data)
+    {
+        if ($data['event'] === 'charge.success') {
+            $reference = $data['data']['reference'];
+            $this->updatePaymentStatus($reference, $data['data']);
+        }
+    }
+
+    private function processFlutterwaveWebhook(array $data)
+    {
+        if ($data['event'] === 'charge.completed') {
+            $reference = $data['data']['tx_ref'];
+            $this->updatePaymentStatus($reference, $data['data']);
+        }
+    }
+
+    private function processCashworxWebhook(array $data)
+    {
+        // Process Cashworx webhook
+        if (isset($data['status']) && $data['status'] === 'success') {
+            $reference = $data['receipt_no'];
+            $this->updatePaymentStatus($reference, $data);
+        }
+    }
+
+    private function updateInvoiceStatus(string $invoiceNumber, string $status)
+    {
+        Invoice::where('invoice_number', $invoiceNumber)
+            ->update(['status' => $status === 'paid' ? 1 : 0]);
     }
 }

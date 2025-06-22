@@ -16,6 +16,8 @@ class Kernel
             \App\Http\Middleware\Authenticate::class,
         ],
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
+        'check.role' => \App\Http\Middleware\CheckRole::class,
+        'role' => \App\Http\Middleware\RoleMiddleware::class,
     ];
 
 

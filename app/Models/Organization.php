@@ -32,4 +32,42 @@ class Organization extends Model
     {
         return $this->hasMany(ServiceFees::class);
     }
+
+     // Relationship with IdConfig
+    public function idConfigs()
+    {
+        return $this->hasMany(IdConfig::class);
+    }
+
+    // Active ID configurations only
+    public function activeIdConfigs()
+    {
+        return $this->hasMany(IdConfig::class)->where('is_active', true);
+    }
+
+    // Ordered ID configurations
+    public function orderedIdConfigs()
+    {
+        return $this->hasMany(IdConfig::class)
+            ->where('is_active', true)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('created_at', 'asc');
+    }
+
+    // Relationship with State (if applicable)
+    public function state()
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    // Scopes
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeByState($query, $stateId)
+    {
+        return $query->where('state_id', $stateId);
+    }
 }

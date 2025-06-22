@@ -10,6 +10,8 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "cloudinary/cloudinary_php": "^3.1",
+        "google/apiclient": "^2.18",
         "intervention/image": "^3.11",
         "laravel/framework": "^11.31",
         "laravel/socialite": "^5.16",

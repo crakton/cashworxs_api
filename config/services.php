@@ -50,5 +50,10 @@ return [
         'key' => env('PAYMENT_GATEWAY_KEY'),
         'secret' => env('PAYMENT_GATEWAY_SECRET'),
     ],
+    'onesignal' => [
+        'rest_app_id'=> env('ONESIGNAL_API_APP_ID'),
+        'key'=>env('ONESIGNAL_API_KEY')
+    ],
+    'firebase' => ['server_key'=>env('FCM_SERVER_KEY')]
 
 ];

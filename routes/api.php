@@ -4,156 +4,273 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\ServiceFeesController;
 use App\Http\Controllers\Admin\ServiceTaxesController;
 use App\Http\Controllers\Admin\OrganizationController;
+use App\Http\Controllers\IdConfigController;
 use App\Http\Controllers\Api\OnboardingController;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\Auth\OAuthController;
+// use App\Http\Controllers\Auth\OAuthController;
+use App\Http\Controllers\InternalRevenueServiceController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Platforms\FileUploadController;
 use App\Http\Controllers\Platforms\PaymentController;
+use App\Http\Controllers\StateController;
 use App\Http\Controllers\User\FeesController;
 use App\Http\Controllers\User\SettingsController;
 use App\Http\Controllers\User\TaxesController;
 use App\Http\Controllers\User\UserController;
+use Illuminate\Support\Facades\Route;
 
-// onboarding
+// Public routes
 Route::prefix('onboarding')->group(function () {
-	Route::get('', [OnboardingController::class, 'index']);
-	Route::put('/{id}', [OnboardingController::class, 'UpdateOnboardingSection']);
-});
-
-// dashboard 
-Route::prefix('dashboard')->group(function () {
-	Route::get('stats', [AdminDashboardController::class, 'getDashboardStats']);
+    Route::get('', [OnboardingController::class, 'index']);
+    Route::put('/{id}', [OnboardingController::class, 'UpdateOnboardingSection']);
 });
 
 Route::prefix('auth')->group(function () {
-	Route::post('register', [AuthController::class, 'register']);
-	Route::post('login', [AuthController::class, 'login']);
-	Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
-	Route::post('reset-password', [AuthController::class, 'resetPassword']);
-	Route::post('otp/send', [AuthController::class, 'sendOTP']);
-	Route::post('otp/verify', [AuthController::class, 'verifyOTP']);
-
-	// protected routes requires authentication
-	Route::middleware(['api', 'auth:admin'])->group(function () {
-		//verification
-		Route::post('logout', [AuthController::class, 'logout']);
-	});
+    Route::post('register', [AuthController::class, 'register']);
+    Route::post('login', [AuthController::class, 'login']);
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('otp/send', [AuthController::class, 'sendOTP']);
+    Route::post('otp/verify', [AuthController::class, 'verifyOTP']);
 });
 
+
+// Authenticated routes
 Route::middleware(['api', 'auth:admin'])->group(function () {
-	Route::prefix('transactions')->group(function () {
+    // Auth protected
+    Route::prefix('auth')->group(function () {
+        Route::post('logout', [AuthController::class, 'logout']);
+    });
 
-		Route::get('user', [UserController::class, 'getAllTransactions']);
-	});
-});
+    // Dashboard
+    Route::prefix('dashboard')->group(function () {
+        Route::get('stats', [AdminDashboardController::class, 'getDashboardStats'])
+            ->middleware('role:admin,operator');
+    });
 
-// user
-Route::prefix('users')->group(function () {
-	Route::get('activity', [UserController::class, 'getActivities']);
-	Route::get('{id}', [UserController::class, 'getUser']);
-	Route::get('', [UserController::class, 'getAllUsers']);
-	Route::post('activity/new', [UserController::class, 'createActivity']);
+    // Transactions
+    Route::prefix('transactions')->group(function () {
+        Route::get('user', [UserController::class, 'getAllTransactions'])
+            ->middleware('role:admin,operator');
+    });
 
-	// protected user routes
-	Route::middleware(['api', 'auth:admin'])->group(function () {
-		// updateActivity
-		Route::patch('activity/{id}', [UserController::class, 'updateActivity']);
-		// deleteActivity
-		Route::delete('activity/{id}', [UserController::class, 'deleteActivity']);
-		Route::get('greeting', [UserController::class, 'greetUser']);
-		Route::delete('{id}', [UserController::class, 'dropUser']);
-		Route::put('{id}', [UserController::class, 'updateUser']);
-		// user activities (taxes and fees)
-		Route::get('activity/taxes', [TaxesController::class, 'getUserTaxes']);
-		Route::post('activity/tax', [TaxesController::class, 'checkoutTax']);
-		Route::get('activity/tax/{id}', [TaxesController::class, 'getUserTax']);
-		Route::patch('activity/tax/{id}', [TaxesController::class, 'updateUserTax']);
-		Route::delete('activity/tax/{id}', [TaxesController::class, 'dropUserTax']);
-		Route::get('activity/fees', [FeesController::class, 'getUserFees']);
-		Route::post('activity/checkout-fee', [FeesController::class, 'checkoutFee']);
-		Route::get('activity/fee/{id}', [FeesController::class, 'getUserFee']);
-		Route::patch('activity/fee/{id}', [FeesController::class, 'updateUserFee']);
-		Route::delete('activity/fee/{id}', [FeesController::class, 'dropUserFee']);
-	});
-});
+    // Users
+    Route::prefix('users')->group(function () {
+        Route::get('activity', [UserController::class, 'getActivities'])
+            ->middleware('role:admin,operator,irs_specialist');
+        Route::get('{id}', [UserController::class, 'getUser'])
+            ->middleware('role:admin,operator');
+        Route::get('', [UserController::class, 'getAllUsers'])
+            ->middleware('role:admin,operator');
+        Route::post('activity/new', [UserController::class, 'createActivity'])
+            ->middleware('role:admin,operator');
 
-// platforms
-Route::prefix('platforms')->group(function () {
-	Route::middleware(['api', 'auth:admin'])->group(function () {
-		Route::post('/invoices', [PaymentController::class, 'createInvoice']);
-		Route::get('/invoices', [PaymentController::class, 'getAllInvoices']);
-		Route::get('/invoices/user', [PaymentController::class, 'getInvoices']);
-		Route::get('/invoices/{invoiceNumber}', [PaymentController::class, 'getInvoice']);
+        // Admin/Operator only
+        Route::middleware('role:admin,operator')->group(function () {
+            Route::patch('activity/{id}', [UserController::class, 'updateActivity']);
+            Route::delete('activity/{id}', [UserController::class, 'deleteActivity']);
+            Route::get('greeting', [UserController::class, 'greetUser']);
+            Route::delete('{id}', [UserController::class, 'dropUser']);
+            Route::put('{id}', [UserController::class, 'updateUser']);
+        });
 
-		// Payment Routes
-		Route::post('/payments', [PaymentController::class, 'processPayment']);
-		Route::get('/payments', [PaymentController::class, 'getAllPayments']);
-		Route::get('/payments/user', [PaymentController::class, 'getPayments']);
-		Route::get('/payments/{invoiceNumber}', [PaymentController::class, 'getPayment']);
-	});
-	Route::get('states', [SettingsController::class, 'getStates']);
-});
+        // User activities (taxes and fees)
+        Route::prefix('activity')->group(function () {
+            // IRS specialist specific routes
+            Route::middleware('role:irs_specialist')->group(function () {
+                Route::get('taxes', [TaxesController::class, 'getUserTaxes']);
+                Route::post('tax', [TaxesController::class, 'checkoutTax']);
+                Route::get('tax/{id}', [TaxesController::class, 'getUserTax']);
+                Route::patch('tax/{id}', [TaxesController::class, 'updateUserTax']);
+                Route::delete('tax/{id}', [TaxesController::class, 'dropUserTax']);
+            });
 
-// settings
-Route::prefix('settings')->group(function () {
-	Route::get('languages', [SettingsController::class, 'getLanguages']);
+            // Admin/Operator specific routes
+            Route::middleware('role:admin,operator')->group(function () {
+                Route::get('fees', [FeesController::class, 'getUserFees']);
+                Route::post('checkout-fee', [FeesController::class, 'checkoutFee']);
+                Route::get('fee/{id}', [FeesController::class, 'getUserFee']);
+                Route::patch('fee/{id}', [FeesController::class, 'updateUserFee']);
+                Route::delete('fee/{id}', [FeesController::class, 'dropUserFee']);
+            });
+        });
+    });
 
-	Route::middleware(['api', 'auth:admin'])->group(function () {
-		Route::get('', [SettingsController::class, 'getSettings']);
-		Route::post('', [SettingsController::class, 'updateSettings']);
-		Route::post('language', [SettingsController::class, 'updateLanguage']);
-		Route::get('language', [SettingsController::class, 'getLanguage']);
-	});
-});
+    // Platforms
+    Route::prefix('platforms')->group(function () {
+        Route::post('/invoices', [PaymentController::class, 'createInvoice'])
+            ->middleware('role:admin,operator');
+        Route::get('/invoices', [PaymentController::class, 'getAllInvoices'])
+            ->middleware('role:admin,operator');
+        Route::get('/invoices/user', [PaymentController::class, 'getInvoices'])
+            ->middleware('role:admin,operator,irs_specialist');
+        Route::get('/invoices/{invoiceNumber}', [PaymentController::class, 'getInvoice'])
+            ->middleware('role:admin,operator,irs_specialist');
 
-//oauth
-Route::prefix('auth/oauth')->group(function () {
-	// Route::get('{provider}', [OAuthController::class, 'redirectToProvider']);
-	// Route::get('{provider}/callback', [OAuthController::class, 'handleProviderCallback']);
-});
+        // Payment Routes
+        Route::post('/payments', [PaymentController::class, 'processPayment'])
+            ->middleware('role:admin,operator');
+        Route::get('/payments', [PaymentController::class, 'getAllPayments'])
+            ->middleware('role:admin,operator');
+        Route::get('/payments/user', [PaymentController::class, 'getPayments'])
+            ->middleware('role:admin,operator,irs_specialist');
+        Route::get('/payments/{invoiceNumber}', [PaymentController::class, 'getPayment'])
+            ->middleware('role:admin,operator,irs_specialist');
+    });
 
-// Organization management routes
+    // Settings
+    Route::prefix('settings')->group(function () {
+        Route::get('languages', [SettingsController::class, 'getLanguages']);
+        
+        Route::middleware('role:admin')->group(function () {
+            Route::get('', [SettingsController::class, 'getSettings']);
+            Route::post('', [SettingsController::class, 'updateSettings']);
+            Route::post('language', [SettingsController::class, 'updateLanguage']);
+            Route::get('language', [SettingsController::class, 'getLanguage']);
+        });
+    });
+
+   // Organizations
 Route::prefix('organizations')->group(function () {
-	Route::get('', [OrganizationController::class, 'getOrganizations']);
-	Route::get('{id}', [OrganizationController::class, 'getOrganization']);
-	Route::middleware('auth:admin')->group(function () {
-		Route::post('', [OrganizationController::class, 'createOrganization']);
-		Route::put('{id}', [OrganizationController::class, 'updateOrganization']);
-		Route::delete('{id}', [OrganizationController::class, 'deleteOrganization']);
-	});
+    Route::get('', [OrganizationController::class, 'getOrganizations'])
+        ->middleware('role:admin,operator');
+    Route::get('{id}', [OrganizationController::class, 'getOrganization'])
+        ->middleware('role:admin,operator,irs_specialist');
+    
+    Route::middleware('role:admin')->group(function () {
+        Route::post('', [OrganizationController::class, 'createOrganization']);
+        Route::put('{id}', [OrganizationController::class, 'updateOrganization']);
+        Route::delete('{id}', [OrganizationController::class, 'deleteOrganization']);
+    });
+
+    // ID Configurations - READ operations (admin, operator, irs_specialist)
+    Route::get('/{orgId}/id-configs', [IdConfigController::class, 'index'])
+        ->middleware('role:admin,operator,irs_specialist');
+    Route::get('/{orgId}/id-configs/{idConfig}', [IdConfigController::class, 'show'])
+        ->middleware('role:admin,operator,irs_specialist');
+    
+    // ID Configurations - WRITE operations (admin only)
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/{orgId}/id-configs', [IdConfigController::class, 'store']);
+        Route::put('/{orgId}/id-configs/{idConfig}', [IdConfigController::class, 'update']);
+        Route::delete('/{orgId}/id-configs/{idConfig}', [IdConfigController::class, 'destroy']);
+        Route::post('/{orgId}/id-configs/reorder', [IdConfigController::class, 'reorder']);
+    });
+    
+    // Field types endpoint (all roles)
+    Route::get('/id-configs/field-types', [IdConfigController::class, 'getFieldTypes'])
+        ->middleware('role:admin,operator,irs_specialist');
+});
+    // Services
+    Route::prefix('services')->group(function () {
+        // Public read-only endpoints
+        Route::get('/fees', [ServiceFeesController::class, 'getServices']);
+        Route::get('/fees/{id}', [ServiceFeesController::class, 'getServiceFee']);
+        Route::get('/organizations/{organizationId}/services', [ServiceFeesController::class, 'getOrganizationServices']);
+        Route::get('taxes', [ServiceTaxesController::class, 'getServiceTaxes']);
+        Route::get('taxes/{id}', [ServiceTaxesController::class, 'getServiceTax']);
+
+        // Admin/Operator management
+        Route::middleware('role:admin,operator')->group(function () {
+            // Fees
+            Route::post('fees', [ServiceFeesController::class, 'createServiceFee']);
+            Route::put('fees/{id}', [ServiceFeesController::class, 'updateServiceFee']);
+            
+            // Taxes
+            Route::post('taxes', [ServiceTaxesController::class, 'createServiceTax']);
+            Route::put('taxes/{id}', [ServiceTaxesController::class, 'updateServiceTax']);
+        });
+        //Admin-only management
+        Route::middleware('role:admin')->group(function () {
+            Route::delete('fees/{id}', [ServiceFeesController::class, 'deleteServiceFee']);
+            Route::delete('taxes/{id}', [ServiceTaxesController::class, 'deleteServiceTax']);
+
+        });
+    });
+
+    // Notifications
+    Route::prefix('notifications')->group(function () {
+        // Admin routes
+        Route::middleware('role:admin,operator')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::post('/', [NotificationController::class, 'store']);
+            Route::get('/{id}', [NotificationController::class, 'show']);
+            Route::put('/{id}', [NotificationController::class, 'update']);
+            Route::delete('/{id}', [NotificationController::class, 'destroy']);
+        });
+
+        // User-specific routes
+        Route::get('/user/my-notifications', [NotificationController::class, 'getUserNotifications']);
+        Route::post('/user/{notificationId}/mark-read', [NotificationController::class, 'markAsRead']);
+        
+        // Notification tokens and preferences
+        Route::post('/user/tokens', [NotificationController::class, 'updateTokens']);
+        Route::post('/user/preferences', [NotificationController::class, 'updatePreferences']);
+        
+        // System routes (admin only)
+        Route::post('/process-scheduled', [NotificationController::class, 'processScheduled'])
+            ->middleware('role:admin');
+    });
+    
+    // States
+    Route::prefix('states')->group(function () {
+        Route::get('/', [StateController::class, 'index']);
+        Route::get('/{id}', [StateController::class, 'show']);
+        
+        Route::middleware('role:admin, operator')->group(function () {
+            Route::post('/', [StateController::class, 'store']);
+            Route::put('/{id}', [StateController::class, 'update']);
+        });
+        
+        Route::middleware('role:admin')->group(function () {
+            Route::delete('/{id}', [StateController::class, 'destroy']);
+        });
+    });
+    
+    // IRS
+    Route::prefix('irs')->group(function () {
+        Route::get('/', [InternalRevenueServiceController::class, 'index']);
+        
+        Route::middleware('role:admin,operator,irs_specialist')->group(function () {
+            Route::post('/', [InternalRevenueServiceController::class, 'store']);
+            Route::get('/{id}', [InternalRevenueServiceController::class, 'show']);
+            Route::put('/{id}', [InternalRevenueServiceController::class, 'update']);
+        });
+        Route::middleware('role:admin')->group(function () {
+             Route::delete('/{id}', [InternalRevenueServiceController::class, 'destroy']);
+             Route::post('/bulk-import', [InternalRevenueServiceController::class, 'bulkImport']);
+
+        });
+    });
+}); 
+// Platforms routes
+Route::prefix('platforms')->group(function () {
+    Route::get('states', [SettingsController::class, 'getStates']);
+    
+    // Protected routes (require authentication)
+    Route::middleware(['auth:api'])->group(function () {
+        // Upload file
+        Route::post('media/upload', [FileUploadController::class, 'upload']);
+        
+        // Delete file
+        Route::delete('media/delete', [FileUploadController::class, 'delete']);
+        
+        // List files
+        Route::get('media/list', [FileUploadController::class, 'list']);
+        
+        // Get file details
+        Route::get('media/details', [FileUploadController::class, 'details']);
+    });
 });
 
-
-
-
-
-// services
-Route::prefix('services')->group(function () {
-	// Service fees management routes
-	Route::get('/fees', [ServiceFeesController::class, 'getServices']);
-	Route::get('/fees/{id}', [ServiceFeesController::class, 'getServiceFee']);
-	Route::get('/organizations/{organizationId}/services', [ServiceFeesController::class, 'getOrganizationServices']);
-	// Route::get('fees', [ServiceFeesController::class, 'getServiceFees']);
-	Route::get('taxes', [ServiceTaxesController::class, 'getServiceTaxes']);
-	// Route::get('fees/{id}', [ServiceFeesController::class, 'getServiceFee']);
-
-	Route::get('taxes/{id}', [ServiceTaxesController::class, 'getServiceTax']);
-	// Fees & Taxes services
-	Route::middleware(['api', 'auth:admin'])->group(function () {});
-	// Only admin services privilge
-	Route::middleware('auth:admin')->group(function () {
-		// fees
-		Route::post('fees', [ServiceFeesController::class, 'createServiceFee']);
-		Route::put('fees/{id}', [ServiceFeesController::class, 'updateServiceFee']);
-		Route::delete('fees/{id}', [ServiceFeesController::class, 'deleteServiceFee']);
-		//taxes
-		Route::post('taxes', [ServiceTaxesController::class, 'createServiceTax']);
-		Route::put('taxes/{id}', [ServiceTaxesController::class, 'updateServiceTax']);
-		Route::delete('taxes/{id}', [ServiceTaxesController::class, 'deleteServiceTax']);
-	});
+// OAuth
+Route::prefix('auth/oauth')->group(function () {
+    // Route::get('{provider}', [OAuthController::class, 'redirectToProvider']);
+    // Route::get('{provider}/callback', [OAuthController::class, 'handleProviderCallback']);
 });
 
-
-//only meant for testing
-Route::delete('users-smackdown', [UserController::class, 'smackUserDB']);
-Route::delete('user-smackdown', [UserController::class, 'smackUser']);
+// Testing routes (remove in production)
+if (app()->environment('local')) {
+    Route::delete('users-smackdown', [UserController::class, 'smackUserDB']);
+    Route::delete('user-smackdown', [UserController::class, 'smackUser']);
+}
