@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: laravel-app
+    runtime: docker
+    env: docker
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "php artisan serve --host=0.0.0.0 --port=8000"
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_HOST
+        fromDatabase:
+          name: cashworxs_production
+          property: host
+      - key: DB_DATABASE
+        fromDatabase:
+          name: cashworxs_production
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: cashworxs_production
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: cashworxs_production
+          property: password
+
+databases:
+  - name: cashworxs_production
+    plan: free
+    databaseName: crakton_ovsp
+    user: crakton
