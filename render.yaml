@@ -4,7 +4,9 @@ services:
     runtime: docker
     plan: free
     env: docker
-    buildCommand: ./build.sh
+    buildCommand: |
+      docker build -t laravel-app .
+      docker run --rm -v $(pwd):/var/www/html laravel-app /bin/bash -c "./build.sh"
     startCommand: php artisan serve --host=0.0.0.0 --port=10000
     envVars:
       - key: APP_ENV
@@ -27,9 +29,3 @@ services:
         fromDatabase:
           name: cashworx_ovsp
           property: password
-
-databases:
-  - name: cashworx_ovsp
-    plan: free
-    databaseName: laravel
-    user: laravel

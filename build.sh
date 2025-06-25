@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# Install dependencies
-composer install --no-dev --optimize-autoloader --no-interaction
+# Ensure storage directories exist
+mkdir -p storage/framework/{cache,sessions,testing,views}
+mkdir -p storage/logs
 
-# Run production optimizations
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+# Set permissions
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
 
-# Check if migrations need to run (only on first deploy)
-if [ ! -f "/var/www/html/storage/framework/migrations_ran" ]; then
-    # Wait for database to be ready (important for Render)
+# Check if this is the first deployment
+if [ ! -f "storage/framework/migrations_ran" ]; then
+    # Wait for database to be ready
     echo "Waiting for database to be ready..."
     for i in {1..10}; do
         php artisan db:show > /dev/null 2>&1 && break
@@ -21,8 +21,6 @@ if [ ! -f "/var/www/html/storage/framework/migrations_ran" ]; then
     php artisan migrate --force
     php artisan db:seed --force
     
-    # Create marker file to prevent future runs
-    touch /var/www/html/storage/framework/migrations_ran
-else
-    echo "Migrations already run - skipping"
+    # Create marker file
+    touch storage/framework/migrations_ran
 fi
