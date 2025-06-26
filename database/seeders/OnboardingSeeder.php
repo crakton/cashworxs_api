@@ -27,10 +27,8 @@ class OnboardingSeeder extends Seeder
             ],
         ];
 
-        // Create or update onboarding data
-        Onboarding::updateOrCreate(
-            ['id' => 1], // Assuming you want a single onboarding record with ID 1
-            ['onboarding_data' => json_encode($data)]
-        );
+        Onboarding::create([
+            'onboarding_data' => json_encode($data),
+        ]);
     }
 }

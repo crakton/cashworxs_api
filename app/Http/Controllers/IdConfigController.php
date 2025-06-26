@@ -36,11 +36,23 @@ class IdConfigController extends BaseController
         }
 
         // Only admins can create, update, delete
-        if (in_array($action, ['create', 'update', 'delete']) && !$user->hasRole('admin')) {
+        if (in_array($action, ['create', 'update', 'delete'])) {
             throw new Exception('Permission denied', 403);
         }
 
         throw new Exception('Permission denied', 403);
+    }
+
+    /**
+     * Get the next available sort order for a new configuration
+     */
+    private function getNextSortOrder($organizationId)
+    {
+        $lastOrder = IdConfig::where('organization_id', $organizationId)
+            ->where('is_active', true)
+            ->max('sort_order');
+            
+        return $lastOrder !== null ? $lastOrder + 1 : 0;
     }
 
     /**
@@ -62,7 +74,7 @@ class IdConfigController extends BaseController
                 ->get();
 
             return $this->sendResponse([
-                'data' => $idConfigs,
+                'identities' => $idConfigs,
                 'organization' => [
                     'id' => $organization->id,
                     'name' => $organization->name ?? 'Unknown Organization'
@@ -104,15 +116,15 @@ class IdConfigController extends BaseController
                 'is_required' => 'boolean',
                 'validation_rules' => 'nullable|json',
                 'help_text' => 'nullable|string',
-                'sort_order' => 'integer|min:0',
                 'is_active' => 'boolean',
+                // Remove sort_order from validation as it will be handled automatically
             ]);
 
             // Set default values
             $validated['organization_id'] = $organization->id;
             $validated['is_required'] = $validated['is_required'] ?? false;
             $validated['is_active'] = $validated['is_active'] ?? true;
-            $validated['sort_order'] = $validated['sort_order'] ?? 0;
+            $validated['sort_order'] = $this->getNextSortOrder($organization->id);
 
             $config = DB::transaction(function () use ($validated) {
                 return IdConfig::create($validated);
@@ -189,9 +201,14 @@ class IdConfigController extends BaseController
                 'is_required' => 'sometimes|boolean',
                 'validation_rules' => 'nullable|json',
                 'help_text' => 'nullable|string',
-                'sort_order' => 'sometimes|integer|min:0',
+                // Remove sort_order from update validation as it should only be changed via reorder
                 'is_active' => 'sometimes|boolean',
             ]);
+
+            // Prevent updating sort_order directly
+            if (isset($validated['sort_order'])) {
+                unset($validated['sort_order']);
+            }
 
             $idConfig->update($validated);
 

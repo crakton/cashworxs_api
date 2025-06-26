@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\ServiceTaxes;
-use Illuminate\Support\Str;
 
 class ServiceTaxesSeeder extends Seeder
 {
@@ -12,6 +11,7 @@ class ServiceTaxesSeeder extends Seeder
     {
         $taxes = [
             [
+                'id' => \Illuminate\Support\Str::ulid(),
                 'name' => 'Value Added Tax (VAT)',
                 'type' => 'Federal Tax',
                 'state' => 'Federal',
@@ -23,14 +23,23 @@ class ServiceTaxesSeeder extends Seeder
                     'payment_type' => 'Recurring',
                 ],
             ],
-            // ... other taxes
+            [
+                'id' => \Illuminate\Support\Str::ulid(),
+                'name' => 'Personal Income Tax',
+                'type' => 'State Tax',
+                'state' => 'Oyo',
+                'amount' => 10,
+                'status' => true,
+                'description' => 'Tax on personal income for residents of Oyo state.',
+                'metadata' => [
+                    'payment_support' => ['POS', 'Card Payment'],
+                    'payment_type' => 'Recurring',
+                ],
+            ],
         ];
 
         foreach ($taxes as $tax) {
-            ServiceTaxes::firstOrCreate(
-                ['name' => $tax['name']],
-                $tax
-            );
+            ServiceTaxes::create($tax);
         }
     }
 }

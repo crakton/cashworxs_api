@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Hash;
 
 class AdminSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     */
     public function run(): void
     {
         // Get all states and IRS services upfront to minimize queries
@@ -21,81 +24,63 @@ class AdminSeeder extends Seeder
         $fctState = $states->firstWhere('name', 'FCT');
         $lagosState = $states->firstWhere('name', 'Lagos');
 
-        if (!$fctState || !$lagosState) {
-            $this->command->error('Required states (FCT and Lagos) not found!');
-            return;
-        }
+        // Create the main admin user
+        $admin = User::create([
+            'full_name' => 'Crakton Admin',
+            'phone_number' => '08081646633',
+            'password' => Hash::make('Truth212.'),
+            'is_admin' => true,
+            'verified' => true,
+            'phone_verified_at' => now(),
+            'state_id' => $fctState->id,
+        ]);
 
-        // Create or update the main admin user
-        $admin = User::firstOrCreate(
-            ['phone_number' => '08081646633'],
-            [
-                'full_name' => 'Crakton Admin',
-                'password' => Hash::make('Truth212.'),
-                'is_admin' => true,
-                'verified' => true,
-                'phone_verified_at' => now(),
-                'state_id' => $fctState->id,
-            ]
+        // Assign admin role using relationship
+        $admin->roles()->attach(
+            Role::where('name', 'admin')->firstOrFail()
         );
 
-        // Assign admin role if not already assigned
-        $adminRole = Role::where('name', 'admin')->first();
-        if ($adminRole && !$admin->roles()->where('name', 'admin')->exists()) {
-            $admin->roles()->attach($adminRole);
-        }
-
-        // Create IRS specialists for each state if they don't exist
+        // Create IRS specialists for each state
         foreach ($irsServices as $irs) {
             $state = $irs->state;
             $stateCode = strtoupper(substr($state->name, 0, 3));
             
-            $specialistPhone = '080' . rand(10000000, 99999999);
-            $specialistName = "IRS Specialist {$state->name}";
-            
-            $specialist = User::firstOrCreate(
-                ['full_name' => $specialistName],
-                [
-                    'phone_number' => $specialistPhone,
-                    'password' => Hash::make('Specialist123!'),
-                    'is_admin' => false,
-                    'verified' => true,
-                    'phone_verified_at' => now(),
-                    'state_id' => $state->id,
-                ]
-            );
-
-            $irsRole = Role::where('name', 'irs_specialist')->first();
-            if ($irsRole && !$specialist->roles()->where('name', 'irs_specialist')->exists()) {
-                $specialist->roles()->attach($irsRole);
-                
-                $this->command->info("IRS specialist for {$state->name}:");
-                $this->command->info("Phone: {$specialist->phone_number}");
-                $this->command->info("Password: Specialist123!");
-            }
-        }
-
-        // Create test operator user if it doesn't exist
-        $operatorPhone = '080' . rand(10000000, 99999999);
-        $operator = User::firstOrCreate(
-            ['full_name' => 'Test Operator'],
-            [
-                'phone_number' => $operatorPhone,
-                'password' => Hash::make('Operator123!'),
+            $specialist = User::create([
+                'full_name' => "IRS Specialist {$state->name}",
+                'phone_number' => '080' . rand(10000000, 99999999),
+                'password' => Hash::make('Specialist123!'),
                 'is_admin' => false,
                 'verified' => true,
                 'phone_verified_at' => now(),
-                'state_id' => $lagosState->id,
-            ]
+                'state_id' => $state->id,
+            ]);
+
+            $specialist->roles()->attach(
+                Role::where('name', 'irs_specialist')->firstOrFail()
+            );
+
+            $this->command->info("Created IRS specialist for {$state->name}:");
+            $this->command->info("Phone: {$specialist->phone_number}");
+            $this->command->info("Password: Specialist123!");
+        }
+
+        // Create test operator user
+        $operator = User::create([
+            'full_name' => 'Test Operator',
+            'phone_number' => '080' . rand(10000000, 99999999),
+            'password' => Hash::make('Operator123!'),
+            'is_admin' => false,
+            'verified' => true,
+            'phone_verified_at' => now(),
+            'state_id' => $lagosState->id,
+        ]);
+
+        $operator->roles()->attach(
+            Role::where('name', 'operator')->firstOrFail()
         );
 
-        $operatorRole = Role::where('name', 'operator')->first();
-        if ($operatorRole && !$operator->roles()->where('name', 'operator')->exists()) {
-            $operator->roles()->attach($operatorRole);
-            
-            $this->command->info("\nTest operator:");
-            $this->command->info("Phone: {$operator->phone_number}");
-            $this->command->info("Password: Operator123!");
-        }
+        $this->command->info("\nCreated test operator:");
+        $this->command->info("Phone: {$operator->phone_number}");
+        $this->command->info("Password: Operator123!");
     }
 }
