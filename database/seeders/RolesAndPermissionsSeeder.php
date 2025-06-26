@@ -10,34 +10,42 @@ class RolesAndPermissionsSeeder extends Seeder
 {
     public function run()
     {
-        // Create roles
-        $adminRole = Role::create([
-            'name' => 'admin',
-            'display_name' => 'Administrator',
-            'description' => 'System administrator with full access',
-            'is_active' => true,
-        ]);
+        // Create or update roles using firstOrCreate
+        $adminRole = Role::firstOrCreate(
+            ['name' => 'admin'],
+            [
+                'display_name' => 'Administrator',
+                'description' => 'System administrator with full access',
+                'is_active' => true,
+            ]
+        );
 
-        $operatorRole = Role::create([
-            'name' => 'operator',
-            'display_name' => 'Operator',
-            'description' => 'System operator with limited access',
-            'is_active' => true,
-        ]);
+        $operatorRole = Role::firstOrCreate(
+            ['name' => 'operator'],
+            [
+                'display_name' => 'Operator',
+                'description' => 'System operator with limited access',
+                'is_active' => true,
+            ]
+        );
 
-        $irsSpecialistRole = Role::create([
-            'name' => 'irs_specialist',
-            'display_name' => 'IRS Specialist',
-            'description' => 'State IRS specialist with state-specific access',
-            'is_active' => true,
-        ]);
+        $irsSpecialistRole = Role::firstOrCreate(
+            ['name' => 'irs_specialist'],
+            [
+                'display_name' => 'IRS Specialist',
+                'description' => 'State IRS specialist with state-specific access',
+                'is_active' => true,
+            ]
+        );
 
-        $userRole = Role::create([
-            'name' => 'user',
-            'display_name' => 'User',
-            'description' => 'Regular application user',
-            'is_active' => true,
-        ]);
+        $userRole = Role::firstOrCreate(
+            ['name' => 'user'],
+            [
+                'display_name' => 'User',
+                'description' => 'Regular application user',
+                'is_active' => true,
+            ]
+        );
 
         // Create permissions grouped by features
         $permissions = [
@@ -69,7 +77,10 @@ class RolesAndPermissionsSeeder extends Seeder
         ];
 
         foreach ($permissions as $permissionData) {
-            Permission::create($permissionData);
+            Permission::firstOrCreate(
+                ['name' => $permissionData['name']],
+                $permissionData
+            );
         }
 
         // Assign permissions to roles
