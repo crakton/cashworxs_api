@@ -1,13 +1,14 @@
 FROM php:8.2-fpm as builder
 
-# Install system dependencies
+# Install system dependencies including PostgreSQL client
 RUN apt-get update && apt-get install -y \
     git curl libpng-dev libonig-dev libxml2-dev \
-    libzip-dev libpq-dev zip unzip && \
+    libzip-dev libpq-dev postgresql-client zip unzip && \
     rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd zip opcache
+# Install PHP extensions with proper dependencies
+RUN docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql && \
+    docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd zip opcache
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -35,10 +36,19 @@ RUN php artisan config:cache && \
 # Final stage
 FROM php:8.2-fpm
 
-# Copy installed dependencies from builder
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpng-dev libzip-dev libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy extensions and config from builder
 COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
 COPY --from=builder /var/www/html /var/www/html
+
+# Copy and execute build script
+COPY build.sh /usr/local/bin/build.sh
+RUN chmod +x /usr/local/bin/build.sh
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage && \
@@ -46,6 +56,5 @@ RUN chown -R www-data:www-data /var/www/html/storage && \
 
 WORKDIR /var/www/html
 
-EXPOSE 10000
-
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=10000"]
+# Run build script before starting the server
+CMD ["sh", "-c", "/usr/local/bin/build.sh && php artisan serve --host=0.0.0.0 --port=10000"]    

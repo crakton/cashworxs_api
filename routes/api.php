@@ -274,3 +274,12 @@ if (app()->environment('local')) {
     Route::delete('users-smackdown', [UserController::class, 'smackUserDB']);
     Route::delete('user-smackdown', [UserController::class, 'smackUser']);
 }
+
+Route::get('connction-test', function () {
+   try {
+        DB::connection()->getPdo();
+        echo "Connected successfully to: " . DB::connection()->getDatabaseName();
+    } catch (\Exception $e) {
+        die("Could not connect to the database: " . $e->getMessage());
+   }
+});
