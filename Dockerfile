@@ -1,14 +1,15 @@
 FROM php:8.2-fpm
 
-# Install system dependencies including PostgreSQL client libraries
+# Install system dependencies including PostgreSQL client libraries and intl dependencies
 RUN apt-get update && apt-get install -y \
     git curl libpng-dev libonig-dev libxml2-dev \
     libzip-dev libpq-dev postgresql-client zip unzip \
+    libicu-dev \  
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions with proper PostgreSQL support
+# Install PHP extensions with proper PostgreSQL support and intl
 RUN docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
-    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd zip opcache
+    && docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd zip opcache intl
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
