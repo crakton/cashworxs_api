@@ -8,9 +8,10 @@ mkdir -p storage/logs
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
-# Generate app key if not exists
+# Copy .env.example to .env if it doesn't exist
 if [ ! -f ".env" ]; then
     cp .env.example .env
+    # Generate app key
     php artisan key:generate
 fi
 
