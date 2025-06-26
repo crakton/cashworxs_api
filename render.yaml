@@ -3,29 +3,141 @@ services:
     name: laravel-app
     runtime: docker
     plan: free
-    env: docker
-    buildCommand: |
-      docker build -t laravel-app .
-      docker run --rm -v $(pwd):/var/www/html laravel-app /bin/bash -c "./build.sh"
-    startCommand: php artisan serve --host=0.0.0.0 --port=10000
+    buildCommand: ""
+    startCommand: ""
     envVars:
+      # Core Application Settings
+      - key: APP_NAME
+        value: CASHWORX
       - key: APP_ENV
         value: production
       - key: APP_KEY
-        generateValue: true
+        value: base64:ocRVDxzCY6jVXdC3LjuCfujrejtU4ljo8d2+yv3fLoA=
+      - key: APP_DEBUG
+        value: false
+      - key: APP_TIMEZONE
+        value: UTC
+      - key: APP_URL
+        value: https://your-app-name.onrender.com
+      - key: APP_LOCALE
+        value: en
+      - key: APP_FALLBACK_LOCALE
+        value: en
+      - key: APP_FAKER_LOCALE
+        value: en_US
+      - key: APP_MAINTENANCE_STORE
+        value: database
+      
+      # Database Configuration
+      - key: DB_CONNECTION
+        value: pgsql
       - key: DB_HOST
-        fromDatabase:
-          name: cashworx_ovsp
-          property: host
+        value: dpg-d1cr8jbe5dus73a7ufqg-a.oregon-postgres.render.com
+      - key: DB_PORT
+        value: 5432
       - key: DB_DATABASE
-        fromDatabase:
-          name: cashworx_ovsp
-          property: database
+        value: cashworx_ovsp
       - key: DB_USERNAME
-        fromDatabase:
-          name: cashworx_ovsp
-          property: user
+        value: crakton
       - key: DB_PASSWORD
-        fromDatabase:
-          name: cashworx_ovsp
-          property: password
+        value: LtYDrzE6uLXbB5pZ1lDw59oZDCTvmtn4
+      - key: PGSSLMODE
+        value: require
+      
+      # Application Settings
+      - key: PHP_CLI_SERVER_WORKERS
+        value: 4
+      - key: BCRYPT_ROUNDS
+        value: 12
+      
+      # Logging
+      - key: LOG_CHANNEL
+        value: stack
+      - key: LOG_STACK
+        value: single
+      - key: LOG_LEVEL
+        value: debug
+      
+      # Session (using file since Redis not available on free plan)
+      - key: SESSION_DRIVER
+        value: file
+      - key: SESSION_LIFETIME
+        value: 120
+      - key: SESSION_ENCRYPT
+        value: false
+      - key: SESSION_PATH
+        value: /
+      
+      # Cache (using file since Redis not available on free plan)
+      - key: CACHE_DRIVER
+        value: file
+      - key: CACHE_STORE
+        value: file
+      
+      # Queue (using database since Redis not available)
+      - key: QUEUE_CONNECTION
+        value: database
+      
+      # Filesystem
+      - key: FILESYSTEM_DISK
+        value: local
+      
+      # JWT Authentication
+      - key: JWT_SECRET
+        value: E7NjHXzSC0Kd0xmWWIzGAuqV0k79RhUipsYhb5DEVjfKf4ptktnahfOWCsl92Dg2
+      - key: JWT_TTL
+        value: 1440
+      - key: JWT_REFRESH_TTL
+        value: 43200
+      - key: JWT_ALGO
+        value: HS256
+      
+      # Payment Gateway
+      - key: PAYMENT_GATEWAY_KEY
+        value: 7AwUxeq96x49f542
+      - key: PAYMENT_GATEWAY_SECRET
+        value: DekEULYFNtMVrXll
+      
+      # Termii SMS
+      - key: TERMII_BASE_URI
+        value: https://api.ng.termii.com/api
+      - key: TERMII_API_SECRET
+        value: tsk_x37063368c4a2a59602912ukyv
+      - key: TERMII_API_KEY
+        value: TLOHSFmOgn3wtldFN8zsdw6Py3wqnc7t3VmEMt5GTi7jK9D5zvUKuDF9TSJdO0
+      
+      # Cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        value: de5cihsxl
+      - key: CLOUDINARY_API_KEY
+        value: 545928913692786
+      - key: CLOUDINARY_API_SECRET
+        value: pRewiXLk4LAR9VSU0Ql-KvT46Gw
+      - key: CLOUDINARY_SECURE
+        value: true
+      - key: CLOUDINARY_URL
+        value: cloudinary://545928913692786:pRewiXLk4LAR9VSU0Ql-KvT46Gw@de5cihsxl
+      
+      # CASHWORX Integration
+      - key: CASHWORXS_BASE_URL
+        value: https://server.inteliworxtest.com
+      - key: CASHWORXS_ENABLED
+        value: true
+      - key: CASHWORXS_WEBHOOK_URL
+        value: https://server.inteliworxtest.com/webhook
+      
+      # Paystack Payment Gateway
+      - key: PAYSTACK_PAYMENT_URL
+        value: https://api.paystack.co
+      - key: PAYSTACK_PUBLIC_KEY
+        value: pk_test_6bd575a6439037e4b48d69d5666c03620b0e3fd8
+      - key: PAYSTACK_SECRET_KEY
+        value: sk_test_c105d9a58c8568151ac0da19a6926dfcc5834f80
+      
+      # OneSignal Push Notifications
+      - key: ONESIGNAL_API_KEY
+        value: os_v2_app_kbfax2c72vem5da25mp7qoubvvn3xgatvcxuzumsbcclhbeh4ypgnndojodcpu564p27crubpmigipri7ozr27oauxljklwm34ko77y
+      - key: ONESIGNAL_API_APP_ID
+        value: 504a0be8-5fd5-48ce-8c1a-eb1ff83a81ad
+      - key: FCM_SERVER_KEY
+        value: 8fa8620177aeee81941c39e6b3ae7d52d7624ed5
