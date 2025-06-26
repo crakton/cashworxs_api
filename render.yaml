@@ -18,7 +18,7 @@ services:
       - key: APP_TIMEZONE
         value: UTC
       - key: APP_URL
-        value: https://your-app-name.onrender.com
+        value: 1
       - key: APP_LOCALE
         value: en
       - key: APP_FALLBACK_LOCALE
@@ -32,15 +32,15 @@ services:
       - key: DB_CONNECTION
         value: pgsql
       - key: DB_HOST
-        value: dpg-d1cr8jbe5dus73a7ufqg-a.oregon-postgres.render.com
+        value: dpg-d1emjip5pdvs73c9990g-a.oregon-postgres.render.com
       - key: DB_PORT
         value: 5432
       - key: DB_DATABASE
-        value: cashworx_ovsp
+        value: cashworxs
       - key: DB_USERNAME
         value: crakton
       - key: DB_PASSWORD
-        value: LtYDrzE6uLXbB5pZ1lDw59oZDCTvmtn4
+        value: 8OcMx5NsxO8ZJrDhT6pwSWfd6n3S0Nuf
       - key: PGSSLMODE
         value: require
       
