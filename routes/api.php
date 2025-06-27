@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\ServiceFeesController;
 use App\Http\Controllers\Admin\ServiceTaxesController;
 use App\Http\Controllers\Admin\OrganizationController;
+use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\IdConfigController;
 use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Auth\AuthController;
@@ -22,7 +23,9 @@ use Illuminate\Support\Facades\Route;
 // Public routes
 Route::prefix('onboarding')->group(function () {
     Route::get('', [OnboardingController::class, 'index']);
-    Route::put('/{id}', [OnboardingController::class, 'UpdateOnboardingSection']);
+
+    // Admin/Operator only
+    Route::put('', [OnboardingController::class, 'UpdateOnboardingSection'])->middleware(['auth:admin', 'role:admin,operator']);
 });
 
 Route::prefix('auth')->group(function () {
@@ -282,4 +285,28 @@ Route::get('connction-test', function () {
     } catch (\Exception $e) {
         die("Could not connect to the database: " . $e->getMessage());
    }
+});
+
+// User Management Routes - Protected by auth:api middleware
+Route::prefix('roles')->group(function(){
+
+    Route::middleware(['auth:api'])->group(function () {
+        
+        // User CRUD operations
+        Route::get('/users', [UserManagementController::class, 'index']);
+        
+        
+        Route::post('/users', [UserManagementController::class, 'store']) ;
+        
+        Route::put('/users/{id}', [UserManagementController::class, 'update']);
+        
+        Route::patch('/users/{id}/status', [UserManagementController::class, 'updateStatus']);
+        
+        Route::delete('/users/{id}', [UserManagementController::class, 'destroy']);
+
+        // Helper routes for form data
+        Route::get('/users/states', [UserManagementController::class, 'getStates']);
+        
+        Route::get('/', [UserManagementController::class, 'getRoles']);
+    });
 });

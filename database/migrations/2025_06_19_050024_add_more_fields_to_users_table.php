@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('onesignal_user_id')->nullable()->after('provider_id');
             $table->string('fcm_token')->nullable()->after('onesignal_user_id');
             $table->foreignUlid('state_id')->nullable()->after('fcm_token');
-            $table->string('role')->default('user')->after('state_id'); // Fixed: changed from 'state' to 'state_id'
+            $table->string('role')->after('state_id');
             $table->boolean('push_notifications_enabled')->default(true)->after('role');
             $table->json('notification_preferences')->nullable()->after('push_notifications_enabled');
         });

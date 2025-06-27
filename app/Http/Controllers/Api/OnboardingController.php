@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Models\Onboarding;
-use Request;
+use Illuminate\Http\Request;
 
 class OnboardingController extends BaseController
 {
@@ -23,23 +23,39 @@ class OnboardingController extends BaseController
 		}
 	}
 
-	// edit specific onboarding section by it id
-	public function UpdateOnboardingSection(Request $request, $id)
-	{
+	/**
+	 * Update the onboarding section with the provided data.
+	 *
+	 * @param \Illuminate\Http\Request $request
+	 * @return \Illuminate\Http\JsonResponse
+	 */
+	public function UpdateOnboardingSection(Request $request) {
 		try {
+			// Validate the request data - accept either single item or array of items
 			$validatedData = $request->validate([
-				'description' => 'nullable|string',
-				'image_url' => 'nullable|string',
-				'title' => 'nullable|string'
+				'items' => 'required|array',
+				'items.*.description' => 'nullable|string',
+				'items.*.image_url' => 'nullable|string',
+				'items.*.title' => 'nullable|string'
 			]);
 
-			// get onboarding stats and change the given data field (description, title,image_url)
-			$onboarding = Onboarding::find()->first()->update($validatedData);
-			$onboarding->save();
+			// Get the first onboarding record
+			$onboarding = Onboarding::first();
+			
+			if (!$onboarding) {
+				return $this->sendError('No onboarding data found', [], 404);
+			}
+
+			// Replace the entire array with new items
+			$onboarding->update([
+				'onboarding_data' => json_encode($validatedData['items'])
+			]);
+
+			// Refresh the model to get the updated data
+			$onboarding->refresh();
 
 			return $this->sendResponse($onboarding, 'Onboarding data updated successfully');
 		} catch (\Exception $e) {
-
 			return $this->sendError(
 				'Something went wrong',
 				['error' => $e->getMessage()],
@@ -47,8 +63,6 @@ class OnboardingController extends BaseController
 			);
 		}
 	}
-
-
 	public function addChecklist(Request $request)
 	{
 		$validatedData = $request->validate([

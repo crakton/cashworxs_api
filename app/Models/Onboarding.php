@@ -14,13 +14,12 @@ class Onboarding extends Model
     protected $table = 'onboarding';
 
     protected $fillable = [
-        'user_id',
-        'income',
-        'bvn',
-        'nin',
-    ];
-    protected $hidden = [
         'onboarding_data',
+    ];
+
+
+    // Remove onboarding_data from hidden if you want to see it in responses
+    protected $hidden = [
         'onboarding_stat',
     ];
 }
