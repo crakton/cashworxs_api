@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Api\BaseController;
 use App\Models\User;
+use App\Services\UserNotificationService;
 use Http;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,11 +15,14 @@ use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends BaseController
 {
+    protected $notificationService;
 
-    public function __construct()
+    public function __construct(UserNotificationService $notificationService)
     {
+        $this->notificationService = $notificationService;
         $this->middleware(['auth:api', 'auth:admin'], ['except' => ['login', 'register', 'forgotPassword', 'resetPassword', 'sendOTP', 'verifyOTP']]);
     }
+
     public function register(Request $request)
     {
         try {
@@ -40,11 +44,28 @@ class AuthController extends BaseController
                 'verified' => false,
             ]);
 
+            // Register user with OneSignal after successful creation
+            try {
+                $oneSignalRegistered = $this->notificationService->registerUserWithOneSignal($user);
+                if ($oneSignalRegistered) {
+                    \Log::info("User {$user->id} successfully registered with OneSignal during registration");
+                } else {
+                    \Log::warning("Failed to register user {$user->id} with OneSignal during registration");
+                }
+            } catch (\Exception $e) {
+                // Log the error but don't fail the registration process
+                \Log::error("OneSignal registration failed for user {$user->id} during registration: " . $e->getMessage());
+            }
+
             $token = JWTAuth::fromUser($user);
+
+            // Refresh user data to include OneSignal ID if it was set
+            $user->refresh();
 
             return $this->sendResponse([
                 'token' => $token,
                 'user' => $user,
+                'onesignal_registered' => isset($user->onesignal_user_id),
             ], 'Registration successful', 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
@@ -52,7 +73,6 @@ class AuthController extends BaseController
             return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
         }
     }
-
 
     public function sendOTP(Request $request)
     {
@@ -92,41 +112,6 @@ class AuthController extends BaseController
                 "from" => "careposting"
             ];
 
-            // $curl = curl_init();
-
-            // $post_data = json_encode($payload);
-
-            // curl_setopt_array($curl, array(
-            //     CURLOPT_URL => "https://api.ng.termii.com/api/sms/send",
-            //     CURLOPT_RETURNTRANSFER => true,
-            //     CURLOPT_ENCODING => "",
-            //     CURLOPT_MAXREDIRS => 10,
-            //     CURLOPT_TIMEOUT => 0,
-            //     CURLOPT_FOLLOWLOCATION => true,
-            //     CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            //     CURLOPT_CUSTOMREQUEST => "POST",
-            //     CURLOPT_POSTFIELDS => $post_data,
-            //     CURLOPT_HTTPHEADER => array(
-            //         "Content-Type: application/json"
-            //     ),
-            // ));
-
-            // $response = curl_exec($curl);
-
-            // \Log::info('Termii Response: ' . $response);
-
-            // curl_close($curl);
-
-            // if ($response) {
-            //     return $this->sendResponse([
-            //         'token' => $token,
-            //         'debug_otp' => $otp // REMOVE IN PRODUCTION
-            //     ], 'OTP sent successfully');
-            // } else {
-            //     return $this->sendError('Failed to send OTP');
-            // }
-
-
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
             ])->post($url, $payload);
@@ -150,7 +135,6 @@ class AuthController extends BaseController
         }
     }
 
-
     public function verifyOTP(Request $request)
     {
         try {
@@ -165,10 +149,12 @@ class AuthController extends BaseController
 
             // Log cached data for debugging
             \Log::info('Cached OTP Data:', ['cached' => $cached, 'request' => $request->all()]);
+            
             // Validate the OTP and token
             if (!$cached || (string)$cached['token'] !== $request->token || (string)$cached['otp'] !== $request->otp) {
                 return $this->sendError('Invalid OTP', [], 400);
             }
+            
             // Clear the OTP from cache
             Cache::forget("otp_{$request->phone_number}");
 
@@ -184,6 +170,20 @@ class AuthController extends BaseController
                 'phone_verified_at' => now(),
             ]);
 
+            // Try to register with OneSignal if not already registered
+            if (!$user->onesignal_user_id) {
+                try {
+                    $oneSignalRegistered = $this->notificationService->registerUserWithOneSignal($user);
+                    if ($oneSignalRegistered) {
+                        \Log::info("User {$user->id} successfully registered with OneSignal during OTP verification");
+                    } else {
+                        \Log::warning("Failed to register user {$user->id} with OneSignal during OTP verification");
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("OneSignal registration failed for user {$user->id} during OTP verification: " . $e->getMessage());
+                }
+            }
+
             return $this->sendResponse([], 'OTP verified successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
@@ -192,13 +192,13 @@ class AuthController extends BaseController
         }
     }
 
-
     public function forgotPassword(Request $request)
     {
         try {
             $request->validate([
                 'phone_number' => 'required|string|max:11'
             ]);
+            
             $user = User::where('phone_number', $request->phone_number)->first();
 
             if (!$user) {
@@ -267,9 +267,27 @@ class AuthController extends BaseController
                 return $this->sendError('Invalid credentials', [], 401);
             }
 
+            $authenticatedUser = auth('api')->user();
+
+            // Ensure user is registered with OneSignal on login
+            if (!$authenticatedUser->onesignal_user_id) {
+                try {
+                    $oneSignalRegistered = $this->notificationService->registerUserWithOneSignal($authenticatedUser);
+                    if ($oneSignalRegistered) {
+                        \Log::info("User {$authenticatedUser->id} successfully registered with OneSignal during login");
+                        // Refresh user data to include OneSignal ID
+                        // $authenticatedUser->refresh();
+                    } else {
+                        \Log::warning("Failed to register user {$authenticatedUser->id} with OneSignal during login");
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("OneSignal registration failed for user {$authenticatedUser->id} during login: " . $e->getMessage());
+                }
+            }
+
             return $this->sendResponse([
                 'token' => $token,
-                'user' => auth('api')->user(),
+                'user' => $authenticatedUser,
             ], 'Login successful');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
@@ -283,6 +301,79 @@ class AuthController extends BaseController
         try {
             auth('api')->logout();
             return $this->sendResponse([], 'Successfully logged out');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->sendError('Validation Error', $e->errors(), 422);
+        } catch (\Exception $e) {
+            return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * API endpoint to manually register current user with OneSignal
+     */
+    public function registerOneSignal(Request $request)
+    {
+        try {
+            $user = auth('api')->user();
+            
+            if (!$user) {
+                return $this->sendError('User not authenticated', [], 401);
+            }
+
+            if ($user->onesignal_user_id) {
+                return $this->sendResponse([
+                    'onesignal_user_id' => $user->onesignal_user_id,
+                    'already_registered' => true
+                ], 'User already registered with OneSignal');
+            }
+
+            $success = $this->notificationService->registerUserWithOneSignal($user);
+
+            if ($success) {
+                // $user->refresh();
+                return $this->sendResponse([
+                    'onesignal_user_id' => $user->onesignal_user_id,
+                    'registered' => true
+                ], 'User successfully registered with OneSignal');
+            } else {
+                return $this->sendError('Failed to register with OneSignal', [], 500);
+            }
+        } catch (\Exception $e) {
+            return $this->sendError('Something went wrong', ['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * API endpoint to update user's push subscription
+     */
+    public function updatePushSubscription(Request $request)
+    {
+        try {
+            $user = auth('api')->user();
+            
+            if (!$user) {
+                return $this->sendError('User not authenticated', [], 401);
+            }
+
+            $request->validate([
+                'endpoint' => 'required|string',
+                'p256dh' => 'required|string',
+                'auth' => 'required|string',
+            ]);
+
+            $subscriptionData = [
+                'endpoint' => $request->endpoint,
+                'p256dh' => $request->p256dh,
+                'auth' => $request->auth,
+            ];
+
+            $success = $this->notificationService->updateUserPushSubscription($user->id, $subscriptionData);
+
+            if ($success) {
+                return $this->sendResponse([], 'Push subscription updated successfully');
+            } else {
+                return $this->sendError('Failed to update push subscription', [], 500);
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->sendError('Validation Error', $e->errors(), 422);
         } catch (\Exception $e) {

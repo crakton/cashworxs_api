@@ -6,8 +6,8 @@ use App\Http\Requests\SendNotificationRequest;
 use App\Http\Requests\UpdateNotificationTokensRequest;
 use App\Http\Resources\NotificationResource;
 use App\Models\Notification;
-use App\Models\NotificationRecipient;
 use App\Providers\NotificationService;
+use App\Services\UserNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -15,30 +15,96 @@ use Exception;
 
 class NotificationController extends Controller
 {
-    private $notificationService;
+    protected NotificationService $notificationService;
+    protected UserNotificationService $userNotificationService;
 
-    public function __construct(NotificationService $notificationService)
+    public function __construct(NotificationService $notificationService,UserNotificationService $userNotificationService)
     {
         $this->notificationService = $notificationService;
+        $this->userNotificationService = $userNotificationService;
+
+        // Role-based middleware
+        $this->middleware('admin')->only([
+            'index',
+            'store',
+            'update',
+            'destroy',
+            'processScheduled',
+            'bulkRegisterUsers'
+        ]);
+
+        $this->middleware('role:admin,operator')->only([
+            'store',
+            'update',
+            'destroy'
+        ]);
+
+        $this->middleware('auth')->only([
+            'getUserNotifications',
+            'markAsRead',
+            'updateTokens',
+            'updatePreferences',
+            'subscribeToPush'
+        ]);
     }
 
     /**
-     * Get all notifications (admin only)
+     * Subscribe user to push notifications (called from frontend)
+     */
+    public function subscribeToPush(Request $request): JsonResponse
+    {
+        $request->validate([
+            'subscription' => 'required|array',
+            'subscription.endpoint' => 'required|string',
+            'subscription.keys' => 'required|array',
+            'subscription.keys.auth' => 'required|string',
+            'subscription.keys.p256dh' => 'required|string',
+        ]);
+
+        $userId = Auth::id();
+        $subscriptionData = $request->input('subscription');
+
+        $success = $this->userNotificationService->updateUserPushSubscription($userId, [
+            'endpoint' => $subscriptionData['endpoint'],
+            'auth' => $subscriptionData['keys']['auth'],
+            'p256dh' => $subscriptionData['keys']['p256dh'],
+        ]);
+
+        return response()->json([
+            'success' => $success,
+            'message' => $success ? 'Push subscription updated successfully' : 'Failed to update push subscription'
+        ]);
+    }
+
+    /**
+     * Bulk register existing users with OneSignal (Admin only)
+     */
+    public function bulkRegisterUsers(): JsonResponse
+    {
+        $result = $this->userNotificationService->bulkRegisterUsersWithOneSignal();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Bulk registration completed',
+            'data' => $result
+        ]);
+    }
+
+
+
+    /**
+     * List all notifications (Admin only)
      */
     public function index(Request $request): JsonResponse
     {
-        $this->authorize('viewAny', Notification::class);
+        $query = Notification::with(['sender', 'user', 'stateInfo'])->orderBy('created_at', 'desc');
 
-        $query = Notification::with(['sender', 'user', 'stateInfo'])
-            ->orderBy('created_at', 'desc');
-
-        // Apply filters
         if ($request->has('type')) {
             $query->byType($request->type);
         }
 
-        if ($request->has('state')) {
-            $query->byState($request->state);
+        if ($request->has('state_id')) {
+            $query->byState($request->state_id);
         }
 
         if ($request->has('status')) {
@@ -60,7 +126,7 @@ class NotificationController extends Controller
     }
 
     /**
-     * Create and send notification
+     * Create/send notification
      */
     public function store(SendNotificationRequest $request): JsonResponse
     {
@@ -70,37 +136,23 @@ class NotificationController extends Controller
 
             switch ($data['type']) {
                 case 'admin':
-                    $this->authorize('sendAdminNotification', Notification::class);
                     $result = $this->notificationService->sendAdminNotification(
-                        $data['title'],
-                        $data['message'],
-                        $senderId,
-                        $data['metadata'] ?? null,
-                        $data['scheduled_at'] ?? null
+                        $data['title'], $data['message'], $senderId,
+                        $data['metadata'] ?? null, $data['scheduled_at'] ?? null
                     );
                     break;
 
                 case 'state':
-                    $this->authorize('sendStateNotification', Notification::class);
                     $result = $this->notificationService->sendStateNotification(
-                        $data['title'],
-                        $data['message'],
-                        $data['state'],
-                        $senderId,
-                        $data['metadata'] ?? null,
-                        $data['scheduled_at'] ?? null
+                        $data['title'], $data['message'], $data['state_id'],
+                        $senderId, $data['metadata'] ?? null, $data['scheduled_at'] ?? null
                     );
                     break;
 
                 case 'personal':
-                    $this->authorize('sendPersonalNotification', Notification::class);
                     $result = $this->notificationService->sendPersonalNotification(
-                        $data['title'],
-                        $data['message'],
-                        $data['user_id'],
-                        $senderId,
-                        $data['metadata'] ?? null,
-                        $data['scheduled_at'] ?? null
+                        $data['title'], $data['message'], $data['user_id'],
+                        $senderId, $data['metadata'] ?? null, $data['scheduled_at'] ?? null
                     );
                     break;
 
@@ -125,16 +177,46 @@ class NotificationController extends Controller
         }
     }
 
+     /**
+     * Get user's notification status and tokens
+     */
+    public function getNotificationStatus(): JsonResponse
+    {
+        $user = Auth::user();
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user_id' => $user->id,
+                'onesignal_user_id' => $user->onesignal_user_id,
+                'has_fcm_token' => !empty($user->fcm_token),
+                'onesignal_registered_at' => $user->onesignal_registered_at,
+                'notification_preferences' => $user->notification_preferences ?? [],
+                'push_notifications_enabled' => $user->push_notifications_enabled ?? true,
+            ]
+        ]);
+    }
+
     /**
-     * Get specific notification details
+     * Force register current user with OneSignal
+     */
+    public function registerWithOneSignal(): JsonResponse
+    {
+        $user = Auth::user();
+        $success = $this->userNotificationService->registerUserWithOneSignal($user);
+
+        return response()->json([
+            'success' => $success,
+            'message' => $success ? 'User registered with OneSignal successfully' : 'Failed to register with OneSignal'
+        ]);
+    }
+
+    /**
+     * Show a single notification and stats
      */
     public function show($id): JsonResponse
     {
-        $notification = Notification::with(['sender', 'user', 'stateInfo', 'recipients.user'])
-            ->findOrFail($id);
-
-        $this->authorize('view', $notification);
-
+        $notification = Notification::with(['sender', 'user', 'stateInfo', 'recipients.user'])->findOrFail($id);
         $stats = $this->notificationService->getNotificationStats($id);
 
         return response()->json([
@@ -145,21 +227,12 @@ class NotificationController extends Controller
     }
 
     /**
-     * Update notification (mainly for scheduling)
+     * Update draft notification (e.g., scheduling)
      */
     public function update(Request $request, $id): JsonResponse
     {
         $notification = Notification::findOrFail($id);
-        $this->authorize('update', $notification);
 
-        $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'message' => 'sometimes|string',
-            'scheduled_at' => 'sometimes|nullable|date|after:now',
-            'metadata' => 'sometimes|array',
-        ]);
-
-        // Only allow updates if notification is in draft status
         if ($notification->status !== Notification::STATUS_DRAFT) {
             return response()->json([
                 'success' => false,
@@ -167,7 +240,14 @@ class NotificationController extends Controller
             ], 400);
         }
 
-        $notification->update($request->only(['title', 'message', 'scheduled_at', 'metadata']));
+        $validated = $request->validate([
+            'title' => 'sometimes|string|max:255',
+            'message' => 'sometimes|string',
+            'scheduled_at' => 'sometimes|nullable|date|after:now',
+            'metadata' => 'sometimes|array',
+        ]);
+
+        $notification->update($validated);
 
         return response()->json([
             'success' => true,
@@ -177,14 +257,12 @@ class NotificationController extends Controller
     }
 
     /**
-     * Delete notification
+     * Delete a draft notification
      */
     public function destroy($id): JsonResponse
     {
         $notification = Notification::findOrFail($id);
-        $this->authorize('delete', $notification);
 
-        // Only allow deletion if notification is in draft status
         if ($notification->status !== Notification::STATUS_DRAFT) {
             return response()->json([
                 'success' => false,
@@ -201,7 +279,7 @@ class NotificationController extends Controller
     }
 
     /**
-     * Get user's notifications
+     * Fetch authenticated user's notifications
      */
     public function getUserNotifications(Request $request): JsonResponse
     {
@@ -234,7 +312,7 @@ class NotificationController extends Controller
     }
 
     /**
-     * Mark notification as read
+     * Mark notification as read for user
      */
     public function markAsRead($notificationId): JsonResponse
     {
@@ -248,12 +326,12 @@ class NotificationController extends Controller
     }
 
     /**
-     * Update user's notification tokens
+     * Update notification tokens
      */
     public function updateTokens(UpdateNotificationTokensRequest $request): JsonResponse
     {
-        $data = $request->validated();
         $userId = Auth::id();
+        $data = $request->validated();
 
         $success = $this->notificationService->updateUserTokens(
             $userId,
@@ -272,6 +350,8 @@ class NotificationController extends Controller
      */
     public function updatePreferences(Request $request): JsonResponse
     {
+        $userId = Auth::id();
+
         $request->validate([
             'push_enabled' => 'required|boolean',
             'admin_notifications' => 'boolean',
@@ -279,7 +359,6 @@ class NotificationController extends Controller
             'personal_notifications' => 'boolean',
         ]);
 
-        $userId = Auth::id();
         $success = $this->notificationService->updateNotificationPreferences(
             $userId,
             $request->all()
@@ -292,12 +371,10 @@ class NotificationController extends Controller
     }
 
     /**
-     * Process scheduled notifications (for cron job)
+     * Process all scheduled notifications (e.g., cron)
      */
     public function processScheduled(): JsonResponse
     {
-        $this->authorize('processScheduledNotifications', Notification::class);
-
         $results = $this->notificationService->processScheduledNotifications();
 
         return response()->json([

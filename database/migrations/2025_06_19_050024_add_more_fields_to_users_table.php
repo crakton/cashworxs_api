@@ -14,10 +14,12 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->string('onesignal_user_id')->nullable()->after('provider_id');
             $table->string('fcm_token')->nullable()->after('onesignal_user_id');
+            $table->timestamp('onesignal_registered_at')->nullable()->after('onesignal_user_id');
             $table->foreignUlid('state_id')->nullable()->after('fcm_token');
             $table->string('role')->after('state_id');
             $table->boolean('push_notifications_enabled')->default(true)->after('role');
             $table->json('notification_preferences')->nullable()->after('push_notifications_enabled');
+            $table->boolean('can_receive_notifications')->default(true);
         });
     }
 
@@ -34,7 +36,9 @@ return new class extends Migration
                 'state_id',
                 'role',
                 'push_notifications_enabled',
-                'notification_preferences'
+                'notification_preferences',
+                'onesignal_registered_at',
+                'can_receive_notifications'
             ]);
         });
     }

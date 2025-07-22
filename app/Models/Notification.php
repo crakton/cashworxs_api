@@ -32,7 +32,7 @@ class Notification extends Model
 
     // Type constants
     const TYPE_ADMIN = 'admin';
-    const TYPE_STATE_ID = 'state_id';
+    const TYPE_STATE = 'state';
     const TYPE_PERSONAL = 'personal';
 
     // Status constants
@@ -67,9 +67,9 @@ class Notification extends Model
         return $query->where('type', $type);
     }
 
-    public function scopeByState($query, $state)
+    public function scopeByState($query, $state_id)
     {
-        return $query->where('state', $state);
+        return $query->where('state_id', $state_id);
     }
 
     public function scopeScheduled($query)
@@ -86,7 +86,7 @@ class Notification extends Model
             case self::TYPE_ADMIN:
                 return User::canReceiveNotifications()->get();
             
-            case self::TYPE_STATE_ID:
+            case self::TYPE_STATE:
                 return User::canReceiveNotifications()
                           ->scopeByState($this->state_id)
                           ->get();

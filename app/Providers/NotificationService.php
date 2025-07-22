@@ -18,7 +18,7 @@ class NotificationService extends ServiceProvider
 
     public function __construct()
     {
-        $this->oneSignalAppId = config('services.onesignal.app_id');
+        $this->oneSignalAppId = config('services.onesignal.rest_app_id');
         $this->oneSignalRestApiKey = config('services.onesignal.rest_api_key');
         $this->fcmServerKey = config('services.firebase.server_key');
     }
@@ -32,6 +32,8 @@ class NotificationService extends ServiceProvider
             // Get recipient users based on notification type
             $recipients = $notification->getRecipientUsers();
             
+            Log::info("Notification {$notification->id}: Found {$recipients->count()} recipients");
+            
             if ($recipients->isEmpty()) {
                 Log::warning("No recipients found for notification: {$notification->id}");
                 return ['success' => false, 'message' => 'No recipients found'];
@@ -42,6 +44,16 @@ class NotificationService extends ServiceProvider
             $errors = [];
 
             foreach ($recipients as $user) {
+                Log::info("Processing user {$user->id}: OneSignal={$user->onesignal_user_id}, FCM=" . ($user->fcm_token ? 'present' : 'null'));
+                
+                // Auto-register user with OneSignal if not already registered
+                if (empty($user->onesignal_user_id)) {
+                    Log::info("Auto-registering user {$user->id} with OneSignal");
+                    $this->autoRegisterUserWithOneSignal($user);
+                    // Refresh user data
+                    $user = $user->fresh();
+                }
+                
                 // Create recipient record
                 $recipient = NotificationRecipient::create([
                     'notification_id' => $notification->id,
@@ -51,12 +63,16 @@ class NotificationService extends ServiceProvider
 
                 try {
                     $sent = false;
+                    $attemptedMethods = [];
 
                     // Try OneSignal first if user has OneSignal ID
                     if ($user->onesignal_user_id) {
+                        $attemptedMethods[] = 'OneSignal';
+                        Log::info("Attempting OneSignal for user {$user->id}");
                         $result = $this->sendOneSignalNotification($notification, $user);
                         if ($result['success']) {
                             $sent = true;
+                            Log::info("OneSignal success for user {$user->id}");
                         } else {
                             Log::warning("OneSignal failed for user {$user->id}: " . $result['message']);
                         }
@@ -64,9 +80,12 @@ class NotificationService extends ServiceProvider
 
                     // Try FCM if OneSignal failed or not available
                     if (!$sent && $user->fcm_token) {
+                        $attemptedMethods[] = 'FCM';
+                        Log::info("Attempting FCM for user {$user->id}");
                         $result = $this->sendFCMNotification($notification, $user);
                         if ($result['success']) {
                             $sent = true;
+                            Log::info("FCM success for user {$user->id}");
                         } else {
                             Log::warning("FCM failed for user {$user->id}: " . $result['message']);
                         }
@@ -79,12 +98,17 @@ class NotificationService extends ServiceProvider
                         ]);
                         $successCount++;
                     } else {
+                        $errorMessage = empty($attemptedMethods) ? 
+                            'User has no notification tokens (OneSignal ID or FCM token)' : 
+                            'All notification methods failed: ' . implode(', ', $attemptedMethods);
+                            
                         $recipient->update([
                             'status' => NotificationRecipient::STATUS_FAILED,
-                            'error_details' => ['message' => 'All notification methods failed'],
+                            'error_details' => ['message' => $errorMessage],
                         ]);
                         $failureCount++;
-                        $errors[] = "Failed to send to user {$user->id}";
+                        $errors[] = "Failed to send to user {$user->id}: {$errorMessage}";
+                        Log::error("Failed to send to user {$user->id}: {$errorMessage}");
                     }
 
                 } catch (Exception $e) {
@@ -126,51 +150,108 @@ class NotificationService extends ServiceProvider
     }
 
     /**
-     * Send notification via OneSignal
+     * Auto-register user with OneSignal during notification sending
+     * Updated to use correct API format
+     */
+    private function autoRegisterUserWithOneSignal(User $user)
+    {
+        try {
+            $externalUserId = (string) $user->id;
+            
+            $payload = [
+                'properties' => [
+                    'tags' => [
+                        'user_id' => $user->id,
+                        'user_type' => $user->role ?? 'user',
+                        'state_id' => $user->state_id ?? null,
+                        'created_at' => $user->created_at->toISOString(),
+                    ],
+                    'language' => 'en',
+                    'timezone_id' => config('app.timezone', 'UTC'),
+                    'country' => 'NG',
+                ],
+                'identity' => [
+                    'external_id' => $externalUserId
+                ],
+                'subscriptions' => []
+            ];
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Basic ' . $this->oneSignalRestApiKey,
+            ])->post("https://api.onesignal.com/apps/{$this->oneSignalAppId}/users", $payload);
+
+            $responseData = $response->json();
+
+            if ($response->successful() && (isset($responseData['identity']['external_id']) || isset($responseData['success']))) {
+                $user->update([
+                    'onesignal_user_id' => $externalUserId,
+                    'onesignal_registered_at' => now(),
+                ]);
+                Log::info("Auto-registered user {$user->id} with OneSignal");
+                return true;
+            } else {
+                Log::error("Failed to auto-register user {$user->id} with OneSignal. HTTP Status: {$response->status()}, Response: " . json_encode($responseData));
+                return false;
+            }
+
+        } catch (Exception $e) {
+            Log::error("Auto-registration error for user {$user->id}: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Send notification via OneSignal using correct REST API v1 endpoints
      */
     private function sendOneSignalNotification(Notification $notification, User $user)
     {
         try {
-            $content = [
-                "en" => $notification->message
-            ];
-
-            $headings = [
-                "en" => $notification->title
-            ];
-
-            $fields = [
+            Log::info("OneSignal Config - App ID: {$this->oneSignalAppId}, API Key: " . ($this->oneSignalRestApiKey ? 'present' : 'missing'));
+            
+            // Use the correct REST API v1 endpoint for sending notifications
+            $payload = [
                 'app_id' => $this->oneSignalAppId,
-                'include_external_user_ids' => [$user->onesignal_user_id],
-                'channel_for_external_user_ids' => 'push',
-                'contents' => $content,
-                'headings' => $headings,
+                'target_channel' => 'push',
+                'headings' => [
+                    'en' => $notification->title
+                ],
+                'contents' => [
+                    'en' => $notification->message
+                ],
+                'include_aliases' => [
+                    'external_id' => [$user->onesignal_user_id]
+                ]
             ];
 
             // Add metadata if available
             if ($notification->metadata) {
-                $fields['data'] = $notification->metadata;
+                $payload['data'] = $notification->metadata;
                 
                 // Add image if provided
                 if (isset($notification->metadata['image_url'])) {
-                    $fields['big_picture'] = $notification->metadata['image_url'];
-                    $fields['large_icon'] = $notification->metadata['image_url'];
+                    $payload['big_picture'] = $notification->metadata['image_url'];
+                    $payload['large_icon'] = $notification->metadata['image_url'];
                 }
 
                 // Add action URL if provided
                 if (isset($notification->metadata['action_url'])) {
-                    $fields['url'] = $notification->metadata['action_url'];
+                    $payload['url'] = $notification->metadata['action_url'];
                 }
             }
+
+            Log::info("OneSignal notification payload: " . json_encode($payload));
 
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json; charset=utf-8',
                 'Authorization' => 'Basic ' . $this->oneSignalRestApiKey,
-            ])->post('https://onesignal.com/api/v1/notifications', $fields);
+            ])->post('https://api.onesignal.com/notifications', $payload);
 
             $responseData = $response->json();
+            
+            Log::info("OneSignal notification response: " . json_encode($responseData));
 
-            if ($response->successful() && !isset($responseData['errors'])) {
+            if ($response->successful() && isset($responseData['id'])) {
                 return ['success' => true, 'response' => $responseData];
             } else {
                 $errorMessage = isset($responseData['errors']) ? 
@@ -180,16 +261,19 @@ class NotificationService extends ServiceProvider
             }
 
         } catch (Exception $e) {
+            Log::error("OneSignal exception: " . $e->getMessage());
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
     /**
-     * Send notification via FCM
+     * Send notification via FCM (unchanged)
      */
     private function sendFCMNotification(Notification $notification, User $user)
     {
         try {
+            Log::info("FCM Config - Server Key: " . ($this->fcmServerKey ? 'present' : 'missing'));
+            
             $data = [
                 'to' => $user->fcm_token,
                 'notification' => [
@@ -217,12 +301,16 @@ class NotificationService extends ServiceProvider
                 }
             }
 
+            Log::info("FCM payload: " . json_encode($data));
+
             $response = Http::withHeaders([
                 'Authorization' => 'key=' . $this->fcmServerKey,
                 'Content-Type' => 'application/json',
             ])->post('https://fcm.googleapis.com/fcm/send', $data);
 
             $responseData = $response->json();
+            
+            Log::info("FCM response: " . json_encode($responseData));
 
             if ($response->successful() && isset($responseData['success']) && $responseData['success'] > 0) {
                 return ['success' => true, 'response' => $responseData];
@@ -234,10 +322,13 @@ class NotificationService extends ServiceProvider
             }
 
         } catch (Exception $e) {
+            Log::error("FCM exception: " . $e->getMessage());
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
+    // ... rest of your methods remain the same
+    
     /**
      * Create and send admin notification (to all users)
      */
@@ -263,13 +354,13 @@ class NotificationService extends ServiceProvider
     /**
      * Create and send state-based notification
      */
-    public function sendStateNotification($title, $message, $state, $senderId, $metadata = null, $scheduleAt = null)
+    public function sendStateNotification($title, $message, $state_id, $senderId, $metadata = null, $scheduleAt = null)
     {
         $notification = Notification::create([
             'title' => $title,
             'message' => $message,
             'type' => Notification::TYPE_STATE,
-            'state' => $state,
+            'state_id' => $state_id,
             'sender_id' => $senderId,
             'metadata' => $metadata,
             'scheduled_at' => $scheduleAt,
@@ -426,5 +517,4 @@ class NotificationService extends ServiceProvider
 
         return true;
     }
-
 }

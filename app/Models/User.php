@@ -31,7 +31,9 @@ class User extends Authenticatable implements JWTSubject
         'state_id',
         'role',
         'push_notifications_enabled',
+        'onesignal_registered_at',
         'notification_preferences',
+        'can_receive_notifications'
     ];
 
     protected $hidden = [
@@ -42,8 +44,10 @@ class User extends Authenticatable implements JWTSubject
     protected $casts = [
         'phone_verified_at' => 'datetime',
         'email_verified_at' => 'datetime',
+        'onesignal_registered_at' => 'datetime',
         'verified' => 'boolean',
         'is_admin' => 'boolean',
+        'can_receive_notifications' => 'boolean',
         'push_notifications_enabled' => 'boolean',
         'notification_preferences' => 'json',
     ];

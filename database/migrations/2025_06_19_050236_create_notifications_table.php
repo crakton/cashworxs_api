@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('message');
             $table->enum('type', ['admin', 'state', 'personal'])->default('admin');
-            $table->string('state')->nullable(); // For state-based notifications
+            $table->ulid('state_id')->nullable(); // For state-based notifications
             $table->ulid('user_id')->nullable(); // For personal notifications
             $table->ulid('sender_id'); // Admin/operator who sent the notification
             $table->enum('status', ['draft', 'sent', 'failed'])->default('draft');
@@ -26,7 +26,8 @@ return new class extends Migration
 
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
             $table->foreign('sender_id')->references('id')->on('users')->onDelete('cascade');
-            $table->index(['type', 'state']);
+            $table->foreign('state_id')->references('id')->on('states')->onDelete('cascade');
+            $table->index(['type', 'state_id']);
             $table->index(['status', 'scheduled_at']);
         });
     }

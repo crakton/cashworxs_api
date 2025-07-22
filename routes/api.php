@@ -191,18 +191,22 @@ Route::prefix('organizations')->group(function () {
         });
     });
 
-    // Notifications
-    Route::prefix('notifications')->group(function () {
-        // Admin routes
-        Route::middleware('role:admin,operator')->group(function () {
-            Route::get('/', [NotificationController::class, 'index']);
-            Route::post('/', [NotificationController::class, 'store']);
-            Route::get('/{id}', [NotificationController::class, 'show']);
-            Route::put('/{id}', [NotificationController::class, 'update']);
-            Route::delete('/{id}', [NotificationController::class, 'destroy']);
-        });
+Route::prefix('notifications')->group(function () {
+    // Admin routes
+    Route::middleware('role:admin,operator')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::post('/', [NotificationController::class, 'store']);
+        Route::get('/{id}', [NotificationController::class, 'show']);
+        Route::put('/{id}', [NotificationController::class, 'update']);
+        Route::delete('/{id}', [NotificationController::class, 'destroy']);
+        
+        // Bulk register users with OneSignal (Admin only)
+        Route::post('/bulk-register-users', [NotificationController::class, 'bulkRegisterUsers']);
+    });
 
-        // User-specific routes
+    // User-specific routes (authenticated users)
+    Route::middleware('auth')->group(function () {
+        // User notifications
         Route::get('/user/my-notifications', [NotificationController::class, 'getUserNotifications']);
         Route::post('/user/{notificationId}/mark-read', [NotificationController::class, 'markAsRead']);
         
@@ -210,10 +214,16 @@ Route::prefix('organizations')->group(function () {
         Route::post('/user/tokens', [NotificationController::class, 'updateTokens']);
         Route::post('/user/preferences', [NotificationController::class, 'updatePreferences']);
         
-        // System routes (admin only)
-        Route::post('/process-scheduled', [NotificationController::class, 'processScheduled'])
-            ->middleware('role:admin');
+        // OneSignal and push notification management
+        Route::get('/user/status', [NotificationController::class, 'getNotificationStatus']);
+        Route::post('/user/register-onesignal', [NotificationController::class, 'registerWithOneSignal']);
+        Route::post('/user/subscribe-push', [NotificationController::class, 'subscribeToPush']);
     });
+    
+    // System routes (admin only)
+    Route::post('/process-scheduled', [NotificationController::class, 'processScheduled'])
+        ->middleware('role:admin');
+});
     
     // States
     Route::prefix('states')->group(function () {
