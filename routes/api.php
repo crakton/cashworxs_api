@@ -39,7 +39,7 @@ Route::prefix('auth')->group(function () {
 
 
 // Authenticated routes
-Route::middleware(['api', 'auth:admin'])->group(function () {
+Route::middleware(['api', 'auth'])->group(function () {
     // Auth protected
     Route::prefix('auth')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
@@ -53,8 +53,15 @@ Route::middleware(['api', 'auth:admin'])->group(function () {
 
     // Transactions
     Route::prefix('transactions')->group(function () {
-        Route::get('user', [UserController::class, 'getAllTransactions'])
+        Route::get('admin', [UserController::class, 'getAllTransactions'])
             ->middleware('role:admin,operator');
+              // Transactions
+        Route::get('', [PaymentController::class, 'getAllTransactions'])   
+            ->middleware('role:admin,operator');
+        Route::get('user', [PaymentController::class, 'getUserTransactions'])
+            ->middleware('role:admin,operator,irs_specialist,user');
+        Route::get('{invoiceNumber}', [PaymentController::class, 'getTransaction'])
+            ->middleware('role:admin,operator,irs_specialist,user');
     });
 
     // Users
@@ -107,7 +114,7 @@ Route::middleware(['api', 'auth:admin'])->group(function () {
             ->middleware('role:admin,operator');
         Route::get('/invoices/user', [PaymentController::class, 'getInvoices'])
             ->middleware('role:admin,operator,irs_specialist');
-        Route::get('/invoices/{invoiceNumber}', [PaymentController::class, 'getInvoice'])
+        Route::get('/invoices/{invoiceNumber}', [PaymentController::class, 'getInvoiceByInvoiceNumber'])
             ->middleware('role:admin,operator,irs_specialist');
 
         // Payment Routes
@@ -117,8 +124,7 @@ Route::middleware(['api', 'auth:admin'])->group(function () {
             ->middleware('role:admin,operator');
         Route::get('/payments/user', [PaymentController::class, 'getPayments'])
             ->middleware('role:admin,operator,irs_specialist');
-        Route::get('/payments/{invoiceNumber}', [PaymentController::class, 'getPayment'])
-            ->middleware('role:admin,operator,irs_specialist');
+        Route::get('/payments/{invoiceNumber}', [PaymentController::class, 'getPaymentByInvoiceNumber']);
     });
 
     // Settings
@@ -204,8 +210,7 @@ Route::prefix('notifications')->group(function () {
         Route::post('/bulk-register-users', [NotificationController::class, 'bulkRegisterUsers']);
     });
 
-    // User-specific routes (authenticated users)
-    Route::middleware('auth')->group(function () {
+
         // User notifications
         Route::get('/user/my-notifications', [NotificationController::class, 'getUserNotifications']);
         Route::post('/user/{notificationId}/mark-read', [NotificationController::class, 'markAsRead']);
@@ -218,7 +223,6 @@ Route::prefix('notifications')->group(function () {
         Route::get('/user/status', [NotificationController::class, 'getNotificationStatus']);
         Route::post('/user/register-onesignal', [NotificationController::class, 'registerWithOneSignal']);
         Route::post('/user/subscribe-push', [NotificationController::class, 'subscribeToPush']);
-    });
     
     // System routes (admin only)
     Route::post('/process-scheduled', [NotificationController::class, 'processScheduled'])

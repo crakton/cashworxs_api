@@ -42,6 +42,9 @@ class AuthController extends BaseController
                 'phone_number' => $validated['phone_number'],
                 'password' => Hash::make($validated['password']),
                 'verified' => false,
+                'role'=> User::ROLE_USER,
+                'push_notifications_enabled' => true,
+                'can_receive_notifications' => true,
             ]);
 
             // Register user with OneSignal after successful creation

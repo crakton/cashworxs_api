@@ -264,6 +264,38 @@ class PaymentController extends BaseController
     }
 
     /**
+     * Get payment by invoice number 
+     */ 
+    public function getPaymentByInvoiceNumber(Request $request, string $invoiceNumber)
+    {
+        try {
+            $user = $request->user();
+            $payment = Payment::where('invoice_number', $invoiceNumber)
+                ->where('user_id', $user->id)
+                ->with(['invoice', 'transactions'])
+                ->first();
+            if (!$payment) {
+                return $this->sendError(
+                    'Payment not found for this invoice',
+                    [],
+                    404
+                );
+            }
+            return $this->sendResponse(
+                $payment,
+                "Payment retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get payment by invoice error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving the payment',
+                $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
      * Get user payments with gateway information
      */
     public function getPayments(Request $request)
@@ -284,6 +316,64 @@ class PaymentController extends BaseController
             Log::error('Get payments error: ' . $e->getMessage());
             return $this->sendError(
                 'An error occurred while retrieving payments',
+                $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
+     * Get all payments 
+     */
+    public function getAllPayments(Request $request)
+    {
+        try {
+            $payments = Payment::with(['user', 'invoice', 'transactions'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            return $this->sendResponse(
+                $payments,
+                "All payments retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get all payments error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving all payments',
+                $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
+     * Get invoice by invoice number
+     * This method retrieves a specific invoice by its number.
+     * It is intended for user access and should be protected by appropriate middleware.
+     */
+    public function getInvoiceByInvoiceNumber(Request $request, string $invoiceNumber)
+    {
+        try {
+            $user = $request->user();
+            $invoice = Invoice::where('invoice_number', $invoiceNumber)
+                ->where('user_id', $user->id)
+                ->with(['items', 'payment', 'transactions'])
+                ->first();
+            if (!$invoice) {
+                return $this->sendError(
+                    'Invoice not found',
+                    [],
+                    404
+                );
+            }
+            return $this->sendResponse(
+                $invoice,
+                "Invoice retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get invoice by number error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving the invoice',
                 $e->getMessage(),
                 500
             );
@@ -318,6 +408,32 @@ class PaymentController extends BaseController
     }
 
     /**
+     * Get all invoices
+     * This method retrieves all invoices across the platform.
+     * It is intended for administrative use and should be protected by appropriate middleware.
+     */
+
+    public function getAllInvoices(Request $request)
+    {
+        try {
+            $invoices = Invoice::with(['user', 'items', 'payment', 'transactions'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+            return $this->sendResponse(
+                $invoices,
+                "All invoices retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get all invoices error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving all invoices',
+                $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
      * Get user transactions
      */
     public function getTransactions(Request $request)
@@ -337,6 +453,31 @@ class PaymentController extends BaseController
             Log::error('Get transactions error: ' . $e->getMessage());
             return $this->sendError(
                 'An error occurred while retrieving transactions',
+                $e->getMessage(),
+                500
+            );
+        }
+    }
+
+    /**
+     * Get all transactions
+     * This method retrieves all transactions across the platform.
+     * It is intended for administrative use and should be protected by appropriate middleware.
+     */
+    public function getAllTransactions(Request $request)
+    {
+        try {
+            $transactions = Transaction::with(['user', 'payment', 'invoice'])
+                ->orderBy('created_at', 'desc')
+                ->get();
+            return $this->sendResponse(
+                $transactions,
+                "All transactions retrieved successfully"
+            );
+        } catch (\Exception $e) {
+            Log::error('Get all transactions error: ' . $e->getMessage());
+            return $this->sendError(
+                'An error occurred while retrieving all transactions',
                 $e->getMessage(),
                 500
             );
