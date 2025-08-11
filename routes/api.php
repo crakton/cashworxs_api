@@ -107,20 +107,16 @@ Route::middleware(['api', 'auth:api,admin'])->group(function () {
 
     // Platforms
     Route::prefix('platforms')->group(function () {
-        Route::post('/invoices', [PaymentController::class, 'createInvoice'])
-            ->middleware('role:admin,operator');
-        Route::get('/invoices', [PaymentController::class, 'getAllInvoices'])
-            ->middleware('role:admin,operator');
+        Route::post('/invoices', [PaymentController::class, 'createInvoice']);
+        Route::get('/invoices', [PaymentController::class, 'getAllInvoices']);
         Route::get('/invoices/user', [PaymentController::class, 'getInvoices'])
             ->middleware('role:admin,operator,irs_specialist,user');
         Route::get('/invoices/{invoiceNumber}', [PaymentController::class, 'getInvoiceByInvoiceNumber'])
             ->middleware('role:admin,operator,irs_specialist,user');
 
         // Payment Routes
-        Route::post('/payments', [PaymentController::class, 'processPayment'])
-            ->middleware('role:admin,operator,user');
-        Route::get('/payments', [PaymentController::class, 'getAllPayments'])
-            ->middleware('role:admin,operator');
+        Route::post('/payments', [PaymentController::class, 'processPayment']);
+        Route::get('/payments', [PaymentController::class, 'getAllPayments']);
         Route::get('/payments/user', [PaymentController::class, 'getPayments'])
             ->middleware('role:admin,operator,irs_specialist,user');
         Route::get('/payments/{invoiceNumber}', [PaymentController::class, 'getPaymentByInvoiceNumber'])
