@@ -55,6 +55,14 @@ class Invoice extends Model
     ];
 
     /**
+     * Get the user that owns the invoice.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
      * Get the items for the invoice.
      */
     public function items()
